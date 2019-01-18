@@ -36,4 +36,5 @@ batches_per_epoch_val = 10
 samples_per_file = 5
 num_epochs = 10000
 print_every = 1
+validate_every = 10
 save_every = 10

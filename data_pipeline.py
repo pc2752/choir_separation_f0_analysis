@@ -46,6 +46,7 @@ def data_gen(mode = 'Train', sec_mode = 0):
         out_hcqt = []
         out_atb = []
 
+
         for i in range(max_files_to_process):
 
             voc_index = np.random.randint(0, len(file_list))
@@ -57,7 +58,18 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
             atb = atb[:, 1:]
 
+            atb[:, 0:4] = 0
+
+            atb = np.clip(atb, 0.0, 1.0)
+
             hcqt = feat_file['voc_hcqt']
+
+            # # plt.imshow(atb.T, origin = 'lower', aspect = 'auto')
+            # # plt.show()
+            # freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
+            # time_grid = np.linspace(0, config.hoptime * atb.shape[0], atb.shape[0])
+            # time_grid, est_freqs = utils.get_multif0(atb.T, freq_grid, time_grid)
+            # import pdb;pdb.set_trace()
 
             for j in range(config.samples_per_file):
                 voc_idx = np.random.randint(0, len(hcqt) - config.max_phr_len)

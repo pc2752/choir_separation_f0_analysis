@@ -78,73 +78,78 @@ def main():
         count = 0
 
         for combo in combos:
-            if combo[0]!=0:
-                audio_sop, fs = librosa.core.load(os.path.join(song_dir,song_name+'_soprano_'+str(combo[0])+'.wav'), sr = config.fs)
-                f0 = pitch.extract_f0_sac(audio_sop, fs, 0.00580498866).reshape(-1,1)
-                atb_sop = process_f0(f0, f_bins, n_freqs)
-                audio = audio_sop
-                atb = atb_sop
-            if combo[1]!=0:
-                audio_alt, fs = librosa.core.load(os.path.join(song_dir,song_name + '_alto_' + str(combo[1]) + '.wav'), sr=config.fs)
-                f0 = pitch.extract_f0_sac(audio_alt, fs, 0.00580498866).reshape(-1,1)
-                atb_alt = process_f0(f0, f_bins, n_freqs)
-                if combo[0] != 0:
-                    audio = audio[:audio_alt.shape[0]] + audio_alt[:audio.shape[0]]
-                    atb = atb[:atb_alt.shape[0]] + atb_alt[:atb.shape[0]]
-                else:
-                    audio = audio_alt
-                    atb = atb_alt
-            if combo[2]!=0:
-                audio_bas, fs = librosa.core.load(os.path.join(song_dir, song_name + '_bass_' + str(combo[2]) + '.wav'), sr=config.fs)
-                f0 = pitch.extract_f0_sac(audio_bas, fs, 0.00580498866).reshape(-1,1)
-                atb_bas = process_f0(f0, f_bins, n_freqs)
+            combo_str = str(combo[0]) + str(combo[1]) + str(combo[2]) + str(combo[3])
 
-                if combo[0] == 0 and combo[1] ==0 :
-                    audio = audio_bas
-                    atb = atb_bas
-                else:
-                    audio = audio[:audio_bas.shape[0]] + audio_bas[:audio.shape[0]]
-                    atb = atb[:atb_bas.shape[0]] + atb_bas[:atb.shape[0]]
-            if combo[3]!=0:
-                audio_ten, fs = librosa.core.load(os.path.join(song_dir, song_name + '_tenor_' + str(combo[3]) + '.wav'), sr=config.fs)
-                f0 = pitch.extract_f0_sac(audio_ten, fs, 0.00580498866).reshape(-1,1)
-                atb_ten = process_f0(f0, f_bins, n_freqs)
-                if combo[0]== 0 and combo[1]== 0 and combo[2] == 0:
-                    audio = audio_ten
-                    atb = atb_ten
-                else:
-                    audio = audio[:audio_ten.shape[0]] + audio_ten[:audio.shape[0]]
-                    atb = atb[:atb_ten.shape[0]] + atb_ten[:atb.shape[0]]
-            num_sources = 4 - combo.count(0)
-            audio = audio/num_sources
+            if not os.path.isfile(config.feats_dir+song_name+'_'+combo_str+'.hdf5'):
+                if combo[0]!=0:
+                    audio_sop, fs = librosa.core.load(os.path.join(song_dir,song_name+'_soprano_'+str(combo[0])+'.wav'), sr = config.fs)
+                    f0 = pitch.extract_f0_sac(audio_sop, fs, config.hoptime).reshape(-1,1)
+                    atb_sop = process_f0(f0, f_bins, n_freqs)
+                    audio = audio_sop
+                    atb = atb_sop
+                if combo[1]!=0:
+                    audio_alt, fs = librosa.core.load(os.path.join(song_dir,song_name + '_alto_' + str(combo[1]) + '.wav'), sr=config.fs)
+                    f0 = pitch.extract_f0_sac(audio_alt, fs, config.hoptime).reshape(-1,1)
+                    atb_alt = process_f0(f0, f_bins, n_freqs)
+                    if combo[0] != 0:
+                        audio = audio[:audio_alt.shape[0]] + audio_alt[:audio.shape[0]]
+                        atb = atb[:atb_alt.shape[0]] + atb_alt[:atb.shape[0]]
+                    else:
+                        audio = audio_alt
+                        atb = atb_alt
+                if combo[2]!=0:
+                    audio_bas, fs = librosa.core.load(os.path.join(song_dir, song_name + '_bass_' + str(combo[2]) + '.wav'), sr=config.fs)
+                    f0 = pitch.extract_f0_sac(audio_bas, fs, config.hoptime).reshape(-1,1)
+                    atb_bas = process_f0(f0, f_bins, n_freqs)
 
-            voc_stft, voc_cqt, voc_hcqt = sig_process.get_feats(audio)
+                    if combo[0] == 0 and combo[1] ==0 :
+                        audio = audio_bas
+                        atb = atb_bas
+                    else:
+                        audio = audio[:audio_bas.shape[0]] + audio_bas[:audio.shape[0]]
+                        atb = atb[:atb_bas.shape[0]] + atb_bas[:atb.shape[0]]
+                if combo[3]!=0:
+                    audio_ten, fs = librosa.core.load(os.path.join(song_dir, song_name + '_tenor_' + str(combo[3]) + '.wav'), sr=config.fs)
+                    f0 = pitch.extract_f0_sac(audio_ten, fs, config.hoptime).reshape(-1,1)
+                    atb_ten = process_f0(f0, f_bins, n_freqs)
+                    if combo[0]== 0 and combo[1]== 0 and combo[2] == 0:
+                        audio = audio_ten
+                        atb = atb_ten
+                    else:
+                        audio = audio[:audio_ten.shape[0]] + audio_ten[:audio.shape[0]]
+                        atb = atb[:atb_ten.shape[0]] + atb_ten[:atb.shape[0]]
+                num_sources = 4 - combo.count(0)
+                audio = audio/num_sources
 
-            combo_str = str(combo[0])+str(combo[1])+str(combo[2])+str(combo[3])
+                voc_stft, voc_cqt, voc_hcqt = sig_process.get_feats(audio)
 
-
-            hdf5_file = h5py.File(config.feats_dir+song_name+'_'+combo_str+'.hdf5', mode='w')
-
-            hdf5_file.create_dataset("voc_stft", voc_stft.shape, np.complex64)
-
-            hdf5_file.create_dataset("voc_cqt", voc_cqt.shape, np.complex64)
-
-            hdf5_file.create_dataset("voc_hcqt", voc_hcqt.shape, np.float64)
-
-            hdf5_file.create_dataset("atb", atb.shape, np.float64)
+                assert voc_stft.shape[0] == atb.shape[0]
 
 
 
-            hdf5_file["voc_stft"][:,:] = voc_stft
 
-            hdf5_file["voc_cqt"][:,:] = voc_cqt
+                hdf5_file = h5py.File(config.feats_dir+song_name+'_'+combo_str+'.hdf5', mode='w')
 
-            hdf5_file["voc_hcqt"][:,:] = voc_hcqt
+                hdf5_file.create_dataset("voc_stft", voc_stft.shape, np.complex64)
 
-            hdf5_file["atb"][:, :] = atb
+                hdf5_file.create_dataset("voc_cqt", voc_cqt.shape, np.complex64)
+
+                hdf5_file.create_dataset("voc_hcqt", voc_hcqt.shape, np.float64)
+
+                hdf5_file.create_dataset("atb", atb.shape, np.float64)
 
 
-            hdf5_file.close()
+
+                hdf5_file["voc_stft"][:,:] = voc_stft
+
+                hdf5_file["voc_cqt"][:,:] = voc_cqt
+
+                hdf5_file["voc_hcqt"][:,:] = voc_hcqt
+
+                hdf5_file["atb"][:, :] = atb
+
+
+                hdf5_file.close()
 
 
             count+=1
