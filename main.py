@@ -15,11 +15,17 @@ def synth(file_name):
     for key, value in scores.items():
         print('{} : {}'.format(key, value))
 
+def validate():
+    model = models.DeepSal()
+    scores = model.eval_all()
+    import db;pdb.set_trace()
+    # Have a figure out a way to save dictionary or results.
+
 if __name__ == '__main__':
     if sys.argv[1] == '-train' or sys.argv[1] == '--train' or sys.argv[1] == '--t' or sys.argv[1] == '-t':
         print("Training")
         tf.app.run(main=train)
-    elif sys.argv[1] == '-e' or sys.argv[1] == '--eval' or sys.argv[1] == '--eval' or sys.argv[1] == '-eval':
+    elif sys.argv[1] == '-e' or sys.argv[1] == '--e' or sys.argv[1] == '--eval' or sys.argv[1] == '-eval':
         if len(sys.argv)<3:
             print("Please give a file to evaluate")
         else:
@@ -30,6 +36,11 @@ if __name__ == '__main__':
                 print("Currently only supporting hdf5 files which are in the dataset, will be expanded later.")
             else:
                 synth(file_name)
+    elif sys.argv[1] == '-v' or sys.argv[1] == '--v' or sys.argv[1] == '--val' or sys.argv[1] == '-val':
+        print("Evaluating entire validation set")
+        validate()
+
     elif sys.argv[1] == '-help' or sys.argv[1] == '--help' or sys.argv[1] == '--h' or sys.argv[1] == '-h':
         print("%s --train or -t or --t or - train to train the model"%sys.argv[0])
         print("%s -e or --e or -eval or --eval  <filename> to evaluate an hdf5 file"%sys.argv[0])
+        print("%s -v or --v or -val or --val to calculate metrics for entire dataset" % sys.argv[0])

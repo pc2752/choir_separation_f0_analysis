@@ -75,10 +75,12 @@ class DeepSal(object):
         self.load_model(sess)
         scores = self.extract_f0_file(file_name, sess)
         return scores
-
-
-
-
+    def test_file_all(self, file_name, sess):
+        """
+        Function to extract multi pitch from file. Currently supports only HDF5 files.
+        """
+        scores = self.extract_f0_file(file_name, sess)
+        return scores
 
     def validate_file(self, file_name, sess):
         """
@@ -251,6 +253,27 @@ class DeepSal(object):
         acc_score = np.array(acc_scores).mean()
         rec_score = np.array(rec_scores).mean()
         return pre_score, acc_score, rec_score
+
+    def eval_all(self):
+        sess = tf.Session()
+        self.load_model(sess)
+        val_list = [x for x in os.listdir(config.feats_dir) if x.endswith('.hdf5') and x.__contains__('1')]
+        count = 0
+        scores = {}
+        for file_name in val_list:
+            file_score = self.test_file_all(file_name, sess)
+            if count == 0:
+                for key, value in file_score.items():
+                    scores[key] = [value]
+                scores['file_name'] = [file_name]
+            else:
+                for key, value in file_score.items():
+                    scores[key].append(value)
+                scores['file_name'].append(file_name)
+            count += 1
+        return scores
+
+
 
 
 
