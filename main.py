@@ -15,9 +15,9 @@ def synth(file_name):
     for key, value in scores.items():
         print('{} : {}'.format(key, value))
 
-def validate():
+def validate(file_name):
     model = models.DeepSal()
-    scores = model.eval_all()
+    scores = model.eval_all(file_name)
     import db;pdb.set_trace()
     # Have a figure out a way to save dictionary or results.
 
@@ -38,9 +38,15 @@ if __name__ == '__main__':
                 synth(file_name)
     elif sys.argv[1] == '-v' or sys.argv[1] == '--v' or sys.argv[1] == '--val' or sys.argv[1] == '-val':
         print("Evaluating entire validation set")
-        validate()
+        if len(sys.argv)<3:
+            print("Please give a file to evaluate")
+        else:
+            file_name = sys.argv[2]
+            if not file_name.endswith('.csv'):
+                file_name = file_name+'.csv5'
+            validate(file_name)
 
     elif sys.argv[1] == '-help' or sys.argv[1] == '--help' or sys.argv[1] == '--h' or sys.argv[1] == '-h':
         print("%s --train or -t or --t or - train to train the model"%sys.argv[0])
         print("%s -e or --e or -eval or --eval  <filename> to evaluate an hdf5 file"%sys.argv[0])
-        print("%s -v or --v or -val or --val to calculate metrics for entire dataset" % sys.argv[0])
+        print("%s -v or --v or -val or --val <filename> to calculate metrics for entire dataset and save to given filename" % sys.argv[0])

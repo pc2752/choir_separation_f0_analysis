@@ -7,6 +7,7 @@ import utils
 import h5py
 import numpy as np
 import mir_eval
+import pandas as pd
 from random import randint
 
 class DeepSal(object):
@@ -236,7 +237,7 @@ class DeepSal(object):
         # step_loss= sess.run(self.loss, feed_dict=feed_dict)
         # summary_str = sess.run(self.summary, feed_dict=feed_dict)
         # return step_loss, summary_str
-        val_list = [x for x in os.listdir(config.feats_dir) if x.endswith('.hdf5') and x.__contains__('1')]
+        val_list = config.val_list
         start_index = randint(0,len(val_list)-(config.batches_per_epoch_val+1))
         pre_scores = []
         acc_scores = []
@@ -254,10 +255,10 @@ class DeepSal(object):
         rec_score = np.array(rec_scores).mean()
         return pre_score, acc_score, rec_score
 
-    def eval_all(self):
+    def eval_all(self, file_name_csv):
         sess = tf.Session()
         self.load_model(sess)
-        val_list = [x for x in os.listdir(config.feats_dir) if x.endswith('.hdf5') and x.__contains__('1')]
+        val_list = config.val_list
         count = 0
         scores = {}
         for file_name in val_list:
@@ -270,7 +271,13 @@ class DeepSal(object):
                 for key, value in file_score.items():
                     scores[key].append(value)
                 scores['file_name'].append(file_name)
+
+                # import pdb;pdb.set_trace()
             count += 1
+            utils.progress(count, len(val_list), suffix='validation done')
+        scores = pd.DataFrame.from_dict(scores)
+        scores.to_csv(file_name_csv)
+
         return scores
 
 

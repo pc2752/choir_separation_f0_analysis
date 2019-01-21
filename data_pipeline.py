@@ -31,9 +31,10 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
     if mode == 'Train' :
         num_batches = config.batches_per_epoch_train
-        file_list = [x for x in os.listdir(config.feats_dir) if x.endswith('.hdf5') and not x.__contains__('1')]
+        file_list = config.train_list
+        # import pdb;pdb.set_trace()
     else:
-        file_list = [x for x in os.listdir(config.feats_dir) if x.endswith('.hdf5') and x.__contains__('1')]
+        file_list = config.val_list
         num_batches = config.batches_per_epoch_val
 
 
@@ -80,6 +81,8 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
             out_hcqt = np.array(out_hcqt)
             out_hcqt = np.swapaxes(out_hcqt, 2, 3)
+            if config.add_noise:
+                out_hcqt = np.random.rand(out_hcqt.shape) * config.noise_threshold + out_hcqt
             out_atb = np.array(out_atb)
 
 

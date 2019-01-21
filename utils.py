@@ -100,7 +100,9 @@ def overlapadd(fbatch, nchunks, overlap=int(config.max_phr_len / 2)):
     return sep
 
 def get_multif0(pitch_activation_mat, freq_grid, time_grid, thresh=0.3):
-    """Compute multif0 output containing all peaks in the output that
+    """
+    This function was taken from https://github.com/rabitt/ismir2017-deepsalience
+    Compute multif0 output containing all peaks in the output that
        fall above thresh
     Parameters
     ----------
