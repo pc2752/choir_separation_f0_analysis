@@ -10,64 +10,11 @@ import mir_eval
 import pandas as pd
 from random import randint
 
-class DeepSal(object):
+class Model(object):
     def __init__(self):
-        """
-        Function to initialize the synthesizer class.
-        Will see what parameters need to be initialized here.
-        Should initialize:
-        1) modes and epochs, load from config. 
-        2) Placeholders
-        3) Generator and discriminator/critic models.
-
-        """
-        # with tf.Graph().as_default():
         self.get_placeholders()
         self.model()
 
-
-
-
-    def read_input_file(self, file_name):
-        """
-        Function to read and process input file, given name and the synth_mode.
-        Returns features for the file based on mode (0 for hdf5 file, 1 for wav file).
-        Currently, only the HDF5 version is implemented.
-        """
-        feat_file = h5py.File(config.feats_dir + file_name)
-        atb = feat_file['atb'][()]
-
-        atb = atb[:, 1:]
-
-        hcqt = feat_file['voc_hcqt'][()]
-
-        feat_file.close()
-
-        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
-        in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
-                                                      6, 360)
-        in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
-        # in_batches_atb, nchunks_in = utils.generate_overlapadd(atb)
-
-        return in_batches_hcqt, atb, nchunks_in
-
-
-    def extract_f0_file(self, file_name, sess):
-        in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
-        out_batches_atb = []
-        for in_batch_hcqt in in_batches_hcqt:
-            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
-            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
-            out_batches_atb.append(out_atb)
-        out_batches_atb = np.array(out_batches_atb)
-        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
-                         nchunks_in)
-        out_batches_atb = out_batches_atb[:atb.shape[0]]
-        time_1, ori_freq = utils.process_output(atb)
-        time_2, est_freq = utils.process_output(out_batches_atb)
-
-        scores = mir_eval.multipitch.evaluate(time_1, ori_freq, time_2, est_freq)
-        return scores
     def test_file(self, file_name):
         """
         Function to extract multi pitch from file. Currently supports only HDF5 files.
@@ -120,11 +67,7 @@ class DeepSal(object):
         if ckpt and ckpt.model_checkpoint_path:
             print("Using the model in %s"%ckpt.model_checkpoint_path)
             self.saver.restore(sess, ckpt.model_checkpoint_path)
-    def loss_function(self):
-        """
-        returns the loss function for the model, based on the mode. 
-        """
-        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder, logits = self.output_logits))
+
 
     def get_optimizers(self):
         """
@@ -161,6 +104,57 @@ class DeepSal(object):
         print('epoch %d took (%.3f sec)' % (epoch + 1, duration))
         for key, value in print_dict.items():
             print('{} : {}'.format(key, value))
+
+
+class DeepSal(Model):
+
+    def loss_function(self):
+        """
+        returns the loss function for the model, based on the mode. 
+        """
+        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder, logits = self.output_logits))
+
+    def read_input_file(self, file_name):
+        """
+        Function to read and process input file, given name and the synth_mode.
+        Returns features for the file based on mode (0 for hdf5 file, 1 for wav file).
+        Currently, only the HDF5 version is implemented.
+        """
+        feat_file = h5py.File(config.feats_dir + file_name)
+        atb = feat_file['atb'][()]
+
+        atb = atb[:, 1:]
+
+        hcqt = feat_file['voc_hcqt'][()]
+
+        feat_file.close()
+
+        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
+        in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
+                                                      6, 360)
+        in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
+        # in_batches_atb, nchunks_in = utils.generate_overlapadd(atb)
+
+        return in_batches_hcqt, atb, nchunks_in
+
+
+    def extract_f0_file(self, file_name, sess):
+        in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
+        out_batches_atb = []
+        for in_batch_hcqt in in_batches_hcqt:
+            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
+            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+            out_batches_atb.append(out_atb)
+        out_batches_atb = np.array(out_batches_atb)
+        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in)
+        out_batches_atb = out_batches_atb[:atb.shape[0]]
+        time_1, ori_freq = utils.process_output(atb)
+        time_2, est_freq = utils.process_output(out_batches_atb)
+
+        scores = mir_eval.multipitch.evaluate(time_1, ori_freq, time_2, est_freq)
+        return scores
+
         # import pdb;pdb.set_trace()
 
     def train(self):
@@ -300,7 +294,7 @@ class DeepSal(object):
 
 def test():
     model = DeepSal()
-    model.extract_f0_file('locus_0101.hdf5')
+    model.test_file('locus_0101.hdf5')
 
 if __name__ == '__main__':
     test()
