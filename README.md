@@ -15,10 +15,13 @@ To install, clone the repository and use <pre><code>pip install requirements.txt
 <h3>Training and inference</h3>
 
 
-Once setup, you can run the followinf commands. To train the model: <pre><code>python main.py -t</code></pre>. To display evaluation metrics for a particular file:
+Once setup, you can run the followinf commands. 
+To train the model: 
+<pre><code>python main.py -t</code></pre>. 
+To display evaluation metrics for a particular file:
 Use <pre><code>python main.py -e <i>filename</i></code></pre> 
 To save evaluation metrics for the entrie dataset and save to a csv file:
-Use <pre><code>python main.py -v </code></pre> 
+Use <pre><code>python main.py -v <i>filename</i></code></pre> 
 
 <h3>Evaluation</h3> 
 
