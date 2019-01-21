@@ -15,18 +15,21 @@ To install, clone the repository and use <pre><code>pip install requirements.txt
 <h3>Training and inference</h3>
 
 
-Once setup, you can run the command <pre><code>python main.py -t</code></pre> to train.
-Use <pre><code>python main.py -e <i>filename</i></code></pre> to calculate metrics for a file.
-Use <pre><code>python main.py -v </code></pre> to calculate metrics for the entire validation set.
+Once setup, you can run the followinf commands. 
+To train the model: 
+<pre><code>python main.py -t</code></pre>. 
+To display evaluation metrics for a particular file:
+Use <pre><code>python main.py -e <i>filename</i></code></pre> 
+To save evaluation metrics for the entrie dataset and save to a csv file:
+Use <pre><code>python main.py -v <i>filename</i></code></pre> 
 
 <h3>Evaluation</h3> 
 
 
- 
-We are currently working on future applications for the methodology and the rest of the files in the repository are for this purpose, please ignore. We will further update the repository in the coming months. 
+ We will further update the repository in the coming months. 
 
 
 <h2>Acknowledgments</h2>
-The TITANX used for this research was donated by the NVIDIA Corporation. This work is partially supported by the Towards Richer Online Music Public-domain Archives <a href="https://trompamusic.eu/" rel="nofollow">(TROMPA)</a> project.
+The TITANX used for this research was donated by the NVIDIA Corporation. This work is partially supported by the Towards Richer Online Music Public-domain Archives <a href="https://trompamusic.eu/" rel="nofollow">(TROMPA)</a> (H2020 770376) European project.
 
 [1] Bittner, Rachel M., et al. "Deep Salience Representations for F0 Estimation in Polyphonic Music." ISMIR. 2017.
