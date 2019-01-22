@@ -380,6 +380,8 @@ class Voc_Sep(Model):
                 for ins, f0s, feats in data_generator:
 
                     step_loss, summary_str = self.train_model(ins, f0s, feats, sess)
+                    if np.isnan(step_loss):
+                        import pdb;pdb.set_trace()
                     epoch_train_loss+=step_loss
 
                     self.train_summary_writer.add_summary(summary_str, epoch)
@@ -403,7 +405,7 @@ class Voc_Sep(Model):
             if (epoch + 1) % config.print_every == 0:
                 self.print_summary(print_dict, epoch, end_time-start_time)
             if (epoch + 1) % config.save_every == 0 or (epoch + 1) == config.num_epochs:
-                self.save_model(sess, epoch+1)
+                self.save_model(sess, epoch+1, config.log_dir_sep)
 
     def train_model(self, ins, f0s, feats, sess):
         """

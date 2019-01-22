@@ -89,6 +89,7 @@ def sep_gen(mode = 'Train', sec_mode = 0):
     max_feat = stat_file["feats_maximus"][()]
     min_feat = stat_file["feats_minimus"][()]
 
+
     stat_file.close()
 
     if mode == 'Train' :
@@ -150,7 +151,9 @@ def sep_gen(mode = 'Train', sec_mode = 0):
 
             voc_feat_file = h5py.File(config.voc_feats_dir + song_name+voc_part+voc_track+'.wav.hdf5', 'r')
 
-            voc_feats = voc_feat_file["voc_feats"]
+            voc_feats = voc_feat_file["voc_feats"][()]
+
+            voc_feats[np.argwhere(np.isnan(voc_feats))] = 0.0
 
             atb = voc_feat_file['atb']
 
@@ -184,6 +187,7 @@ def sep_gen(mode = 'Train', sec_mode = 0):
             out_feats = np.array(out_feats)
 
             out_feats = (out_feats-min_feat)/(max_feat-min_feat)
+
             out_feats = np.clip(out_feats[:, :, :-2],0.0 , 0.1)
 
 
