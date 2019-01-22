@@ -48,7 +48,7 @@ def grid_to_bins(grid, start_bin_val, end_bin_val):
     bins = np.concatenate([[start_bin_val], bin_centers, [end_bin_val]])
     return bins
 
-def main():
+def prep_deepsalience():
     x = [0,2,3,4]
 
     combos = [p for p in itertools.product(x, repeat=4)]
@@ -156,6 +156,62 @@ def main():
 
             utils.progress(count,len(combos))
 
+def prep_voc_sep():
+
+    freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
+
+
+    f_bins = grid_to_bins(freq_grid, 0.0, freq_grid[-1])
+
+    n_freqs = len(freq_grid)
+    songs = next(os.walk(config.wav_dir))[1]
+    for song in songs:
+        print ("Processing song %s" % song)
+        song_dir = config.wav_dir+song+'/IndividualVoices/'
+        song_names = [x for x in os.listdir(song_dir) if x.endswith('.wav') and not x.startswith('.') and not x.endswith('-24b.wav')]
+        count = 0
+        for song_name in song_names:
+
+            
+
+            audio, fs = librosa.core.load(os.path.join(song_dir,song_name), sr = config.fs)
+            audio = np.array(audio)
+            feats = sig_process.stft_to_feats(audio.astype('double'), fs, mode=config.comp_mode)
+            voc_stft, voc_cqt, voc_hcqt = sig_process.get_feats(audio)
+            f0 = pitch.extract_f0_sac(audio, fs, config.hoptime).reshape(-1,1)
+            atb = process_f0(f0, f_bins, n_freqs)
+            assert voc_stft.shape[0] == feats.shape[0]
+
+            hdf5_file = h5py.File(config.voc_feats_dir+song_name+'.hdf5', mode='w')
+
+            hdf5_file.create_dataset("voc_stft", voc_stft.shape, np.complex64)
+
+            hdf5_file.create_dataset("voc_cqt", voc_cqt.shape, np.complex64)
+
+            hdf5_file.create_dataset("voc_hcqt", voc_hcqt.shape, np.float64)
+
+            hdf5_file.create_dataset("voc_feats", feats.shape, np.float64)   
+
+            hdf5_file.create_dataset("atb", atb.shape, np.float64) 
+
+            hdf5_file["voc_stft"][:,:] = voc_stft
+
+            hdf5_file["voc_cqt"][:,:] = voc_cqt
+
+            hdf5_file["voc_hcqt"][:,:] = voc_hcqt
+
+            hdf5_file["voc_feats"][:, :] = feats
+
+            hdf5_file["atb"][:, :] = atb
+            
+            hdf5_file.close()
+
+
+            count+=1
+
+            utils.progress(count,len(song_names))
+
 
 if __name__ == '__main__':
-    main()
+    prep_voc_sep()
+    # prep_deepsalience()

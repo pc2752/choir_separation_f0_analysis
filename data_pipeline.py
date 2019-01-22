@@ -13,7 +13,7 @@ from scipy.ndimage import filters
 
 def process_file(file_name):
 
-    feat_file = h5py.File(config.feats_dir + file_name)
+    feat_file = h5py.File(config.feats_dir + file_name, 'r')
 
     atb = feat_file['atb'][()]
 
@@ -53,7 +53,7 @@ def data_gen(mode = 'Train', sec_mode = 0):
             voc_index = np.random.randint(0, len(file_list))
             voc_file = file_list[voc_index]
             # atb, hcqt = process_file(voc_file)
-            feat_file = h5py.File(config.feats_dir + voc_file)
+            feat_file = h5py.File(config.feats_dir + voc_file, 'r')
 
             atb = feat_file['atb']
 
@@ -64,13 +64,6 @@ def data_gen(mode = 'Train', sec_mode = 0):
             atb = np.clip(atb, 0.0, 1.0)
 
             hcqt = feat_file['voc_hcqt']
-
-            # # plt.imshow(atb.T, origin = 'lower', aspect = 'auto')
-            # # plt.show()
-            # freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
-            # time_grid = np.linspace(0, config.hoptime * atb.shape[0], atb.shape[0])
-            # time_grid, est_freqs = utils.get_multif0(atb.T, freq_grid, time_grid)
-            # import pdb;pdb.set_trace()
 
             for j in range(config.samples_per_file):
                 voc_idx = np.random.randint(0, len(hcqt) - config.max_phr_len)
@@ -89,31 +82,131 @@ def data_gen(mode = 'Train', sec_mode = 0):
             yield out_hcqt, out_atb
 
 
+def sep_gen(mode = 'Train', sec_mode = 0):
+
+    stat_file = h5py.File('./stats.hdf5', mode='r')
+
+    max_feat = stat_file["feats_maximus"][()]
+    min_feat = stat_file["feats_minimus"][()]
+
+    stat_file.close()
+
+    if mode == 'Train' :
+        num_batches = config.batches_per_epoch_train
+        file_list = config.train_list
+        # import pdb;pdb.set_trace()
+    else:
+        file_list = config.val_list
+        num_batches = config.batches_per_epoch_val
+
+
+    max_files_to_process = int(config.batch_size / config.samples_per_file)
+
+
+    for k in range(num_batches):
+
+        voice = np.random.randint(0,4)
+
+        if voice == 0:
+            shortlist = [x for x in file_list if x[-9]!='0']
+            voc_part = '_soprano_'
+            voc_num = -9
+
+        elif voice == 1:
+            shortlist = [x for x in file_list if x[-8]!='0']
+            voc_part = '_alto_'
+            voc_num = -8
+
+        elif voice == 2:
+            shortlist = [x for x in file_list if x[-7]!='0']
+            voc_part = '_bass_' 
+            voc_num = -7
+
+        elif voice == 3:
+            shortlist = [x for x in file_list if x[-6]!='0']
+            voc_part = '_tenor_'
+            voc_num = -6
+
+        out_hcqt = []
+        out_atb = []
+
+        out_feats = []
+
+
+        for i in range(max_files_to_process):
+
+            voc_index = np.random.randint(0, len(shortlist))
+            voc_file = shortlist[voc_index]
+
+            song_name = voc_file.split('_')[0]
+
+            voc_track = voc_file[voc_num]
+
+            feat_file = h5py.File(config.feats_dir + voc_file, 'r')
+
+
+
+            cqt = feat_file['voc_cqt']
+
+            voc_feat_file = h5py.File(config.voc_feats_dir + song_name+voc_part+voc_track+'.wav.hdf5', 'r')
+
+            voc_feats = voc_feat_file["voc_feats"]
+
+            atb = voc_feat_file['atb']
+
+            atb = atb[:, 1:]
+
+            atb[:, 0:4] = 0
+
+            atb = np.clip(atb, 0.0, 1.0)
+
+            max_len = min(len(voc_feats), len(cqt))
+
+            voc_feats = voc_feats[:max_len]
+
+            cqt = cqt[:max_len]
+
+            atb = atb[:max_len]
+            
+            for j in range(config.samples_per_file):
+                voc_idx = np.random.randint(0, len(cqt) - config.max_phr_len)
+                out_hcqt.append(cqt[voc_idx:voc_idx + config.max_phr_len])
+                out_atb.append(atb[voc_idx:voc_idx + config.max_phr_len])
+                out_feats.append(voc_feats[voc_idx:voc_idx + config.max_phr_len])
+
+            feat_file.close()
+
+            out_hcqt = np.array(out_hcqt)
+            # out_hcqt = np.swapaxes(out_hcqt, 2, 3)
+            if config.add_noise:
+                out_hcqt = np.random.rand(out_hcqt.shape) * config.noise_threshold + out_hcqt
+            out_atb = np.array(out_atb)
+            out_feats = np.array(out_feats)
+
+            out_feats = (out_feats-min_feat)/(max_feat-min_feat)
+            out_feats = np.clip(out_feats[:, :, :-2],0.0 , 0.1)
+
+
+            yield abs(out_hcqt), out_atb, out_feats
 
 
 
 
 def get_stats():
-    voc_list = [x for x in os.listdir(config.voice_dir) if x.endswith('.hdf5') and x.startswith('nus')  and not x.startswith('nus_KENN') ]
+    voc_list = [x for x in os.listdir(config.voc_feats_dir) if x.endswith('.hdf5')]
 
-    back_list = [x for x in os.listdir(config.backing_dir) if x.endswith('.hdf5') and not x.startswith('._') and not x.startswith('mir') and not x.startswith('med')]
 
     max_feat = np.zeros(66)
     min_feat = np.ones(66)*1000
-
-    max_voc = np.zeros(513)
-    min_voc = np.ones(513)*1000
-
-    max_mix = np.zeros(513)
-    min_mix = np.ones(513)*1000    
+ 
 
     for voc_to_open in voc_list:
 
-        voc_file = h5py.File(config.voice_dir+voc_to_open, "r")
+        voc_file = h5py.File(config.voc_feats_dir+voc_to_open, "r")
 
-        voc_stft = voc_file['voc_stft']
+        # import pdb;pdb.set_trace()
 
-        feats = np.array(voc_file['feats'])
+        feats = voc_file["voc_feats"][()]
 
         f0 = feats[:,-2]
 
@@ -123,20 +216,7 @@ def get_stats():
 
         feats[:,-2] = f0
 
-        maxi_voc_stft = np.array(voc_stft).max(axis=0)
 
-        # if np.array(feats).min()<0:
-        #     import pdb;pdb.set_trace()
-
-        for i in range(len(maxi_voc_stft)):
-            if maxi_voc_stft[i]>max_voc[i]:
-                max_voc[i] = maxi_voc_stft[i]
-
-        mini_voc_stft = np.array(voc_stft).min(axis=0)
-
-        for i in range(len(mini_voc_stft)):
-            if mini_voc_stft[i]<min_voc[i]:
-                min_voc[i] = mini_voc_stft[i]
 
         maxi_voc_feat = np.array(feats).max(axis=0)
 
@@ -150,44 +230,18 @@ def get_stats():
             if mini_voc_feat[i]<min_feat[i]:
                 min_feat[i] = mini_voc_feat[i]   
 
-    for voc_to_open in back_list:
+    import pdb;pdb.set_trace()
 
-        voc_file = h5py.File(config.backing_dir+voc_to_open, "r")
 
-        voc_stft = voc_file["back_stft"]
-
-        maxi_voc_stft = np.array(voc_stft).max(axis=0)
-
-        # if np.array(feats).min()<0:
-        #     import pdb;pdb.set_trace()
-
-        for i in range(len(maxi_voc_stft)):
-            if maxi_voc_stft[i]>max_mix[i]:
-                max_mix[i] = maxi_voc_stft[i]
-
-        mini_voc_stft = np.array(voc_stft).min(axis=0)
-
-        for i in range(len(mini_voc_stft)):
-            if mini_voc_stft[i]<min_mix[i]:
-                min_mix[i] = mini_voc_stft[i]
-
-    hdf5_file = h5py.File(config.stat_dir+'stats.hdf5', mode='w')
+    hdf5_file = h5py.File('./stats.hdf5', mode='w')
 
     hdf5_file.create_dataset("feats_maximus", [66], np.float32) 
     hdf5_file.create_dataset("feats_minimus", [66], np.float32)   
-    hdf5_file.create_dataset("voc_stft_maximus", [513], np.float32) 
-    hdf5_file.create_dataset("voc_stft_minimus", [513], np.float32)   
-    hdf5_file.create_dataset("back_stft_maximus", [513], np.float32) 
-    hdf5_file.create_dataset("back_stft_minimus", [513], np.float32)   
+
 
     hdf5_file["feats_maximus"][:] = max_feat
     hdf5_file["feats_minimus"][:] = min_feat
-    hdf5_file["voc_stft_maximus"][:] = max_voc
-    hdf5_file["voc_stft_minimus"][:] = min_voc
-    hdf5_file["back_stft_maximus"][:] = max_mix
-    hdf5_file["back_stft_minimus"][:] = min_mix
 
-    # import pdb;pdb.set_trace()
 
     hdf5_file.close()
 
@@ -219,10 +273,10 @@ def get_stats_phonems():
 def main():
     # gen_train_val()
     # get_stats()
-    gen = data_gen('Train', sec_mode = 0)
+    gen = sep_gen('Train', sec_mode = 0)
     while True :
         start_time = time.time()
-        ins, outs = next(gen)
+        ins, outs, feats = next(gen)
         print(time.time()-start_time)
 
     #     plt.subplot(411)

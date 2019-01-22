@@ -6,14 +6,13 @@ import matplotlib.pyplot as plt
 import sys
 import h5py
 import pyworld as pw
-# from reduce import sp_to_mfsc, mfsc_to_sp, ap_to_wbap,wbap_to_ap, get_warped_freqs, sp_to_mgc, mgc_to_sp, mgc_to_mfsc, mfsc_to_mgc
-
+from reduce import sp_to_mfsc, mfsc_to_sp, ap_to_wbap,wbap_to_ap, get_warped_freqs, sp_to_mgc, mgc_to_sp, mgc_to_mfsc, mfsc_to_mgc
+from acoufe import pitch
 
 import config
 import utils
 
 import librosa
-
 
 
 
@@ -35,42 +34,38 @@ def get_hcqt(audio):
 
 
 
-def get_world_feats(vocals):
-    feats=pw.wav2world(vocals,config.fs,frame_period= config.hoptime*1000)
+def stft_to_feats(vocals, fs, mode=config.comp_mode):
+    feats=pw.wav2world(vocals,fs,frame_period=config.hoptime*1000)
 
     ap = feats[2].reshape([feats[1].shape[0],feats[1].shape[1]]).astype(np.float32)
     ap = 10.*np.log10(ap**2)
     harm=10*np.log10(feats[1].reshape([feats[2].shape[0],feats[2].shape[1]]))
-    f0 = feats[0]
+    f0 = pitch.extract_f0_sac(vocals, fs, config.hoptime)
 
-
-    # f0 = pitch.extract_f0_sac(vocals, fs, config.hoptime)
-
-    y = 69+12*np.log2(f0/440)
+    y=69+12*np.log2(f0/440)
     # import pdb;pdb.set_trace()
     # y = hertz_to_new_base(f0)
     nans, x= utils.nan_helper(y)
+
     naners=np.isinf(y)
+
     y[nans]= np.interp(x(nans), x(~nans), y[~nans])
     # y=[float(x-(min_note-1))/float(max_note-(min_note-1)) for x in y]
     y=np.array(y).reshape([len(y),1])
     guy=np.array(naners).reshape([len(y),1])
     y=np.concatenate((y,guy),axis=-1)
 
-    if config.comp_mode == 'mfsc':
+    if mode == 'mfsc':
         harmy=sp_to_mfsc(harm,60,0.45)
         apy=sp_to_mfsc(ap,4,0.45)
-    elif config.comp_mode == 'mgc':
+    elif mode == 'mgc':
         harmy=sp_to_mgc(harm,60,0.45)
         apy=sp_to_mgc(ap,4,0.45)
-
     out_feats=np.concatenate((harmy,apy,y.reshape((-1,2))),axis=1) 
 
     return out_feats
 
 def get_feats(audio):
-
-
 
 
 

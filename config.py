@@ -7,6 +7,7 @@ wav_dir = '../datasets/ChoralSingingDataset/'
 
 
 feats_dir = './feats/'
+voc_feats_dir = './voc_feats/'
 
 
 #FFT Parameters
@@ -43,3 +44,8 @@ train_list = [x for x in os.listdir(feats_dir) if x.endswith('.hdf5') and not x.
 val_list = [x for x in os.listdir(feats_dir) if x.endswith('.hdf5') and x.__contains__('1') or x.startswith('nino')]
 add_noise = False
 noise_threshold = 0.2
+wavenet_filters = 128
+wavenet_layers = 5
+
+# Sep Model
+log_dir_sep = './log_sep/'

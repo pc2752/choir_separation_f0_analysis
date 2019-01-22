@@ -79,7 +79,71 @@ def selu(x):
    scale = 1.0507009873554804934193349852946
    return scale*tf.where(x>=0.0, x, alpha*tf.nn.elu(x))
 
+def nr_wavenet_block(conditioning, dilation_rate = 2, scope = 'nr_wavenet_block', is_train = False):
 
+    with tf.variable_scope(scope):
+        con_pad_forward = tf.pad(conditioning, [[0,0],[dilation_rate,0],[0,0]],"CONSTANT")
+        con_pad_backward = tf.pad(conditioning, [[0,0],[0,dilation_rate],[0,0]],"CONSTANT")
+        con_sig_forward = tf.layers.batch_normalization(tf.layers.conv1d(con_pad_forward, config.wavenet_filters, 2, dilation_rate = dilation_rate, padding = 'valid'), training=is_train)
+        con_sig_backward = tf.layers.batch_normalization(tf.layers.conv1d(con_pad_backward, config.wavenet_filters, 2, dilation_rate = dilation_rate, padding = 'valid'), training=is_train)
+
+        sig = tf.sigmoid(con_sig_forward+con_sig_backward)
+
+
+        con_tanh_forward = tf.layers.batch_normalization(tf.layers.conv1d(con_pad_forward, config.wavenet_filters, 2, dilation_rate = dilation_rate, padding = 'valid'), training=is_train)
+        con_tanh_backward = tf.layers.batch_normalization(tf.layers.conv1d(con_pad_backward, config.wavenet_filters, 2, dilation_rate = dilation_rate, padding = 'valid'), training=is_train)    
+        # con_tanh = tf.layers.conv1d(conditioning,config.wavenet_filters,1)
+
+        tanh = tf.tanh(con_tanh_forward+con_tanh_backward)
+
+
+        outputs = tf.multiply(sig,tanh)
+
+        skip = tf.layers.conv1d(outputs,config.wavenet_filters,1)
+
+        residual = skip + conditioning
+
+    return skip, residual
+
+
+def nr_wavenet(inputs, f0, is_train):
+
+    input_1 = tf.layers.batch_normalization(tf.layers.dense(inputs, config.wavenet_filters), training=is_train)
+
+    f1 = tf.layers.batch_normalization(tf.layers.dense(f0, config.wavenet_filters), training=is_train)
+
+    prenet_out = tf.concat([input_1, f1], axis = -1)
+
+    num_block = config.wavenet_layers
+
+    receptive_field = 2**num_block
+
+    first_conv = tf.layers.batch_normalization(tf.layers.conv1d(prenet_out, config.wavenet_filters, 1), training=is_train)
+    skips = []
+    skip, residual = nr_wavenet_block(first_conv, dilation_rate=1, scope = "nr_wavenet_block_0", is_train = is_train)
+    output = skip
+    for i in range(num_block):
+        skip, residual = nr_wavenet_block(residual, dilation_rate=2**(i+1), scope = "nr_wavenet_block_"+str(i+1), is_train = is_train)
+        skips.append(skip)
+    for skip in skips:
+        output+=skip
+    output = output+first_conv
+
+    output = tf.nn.relu(output)
+
+    output = tf.layers.batch_normalization(tf.layers.conv1d(output,config.wavenet_filters,1), training=is_train)
+
+    output = tf.nn.relu(output)
+
+    output = tf.layers.batch_normalization(tf.layers.conv1d(output,config.wavenet_filters,1), training=is_train)
+
+    output = tf.nn.relu(output)
+
+    harm = tf.layers.batch_normalization(tf.layers.dense(output, 64, activation=tf.nn.relu), training=is_train)
+    # ap = tf.layers.batch_normalization(tf.layers.dense(output, 4, activation=tf.nn.relu), training=is_train)
+    # vuv = tf.layers.batch_normalization(tf.layers.dense(ap, 1, activation=tf.nn.sigmoid), training=is_train)
+
+    return harm
 
 
 if __name__ == '__main__':
