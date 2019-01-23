@@ -22,7 +22,10 @@ To display evaluation metrics for a particular file:
 Use <pre><code>python main.py -e <i>filename</i></code></pre> 
 To save evaluation metrics for the entrie dataset and save to a csv file:
 Use <pre><code>python main.py -v <i>filename</i></code></pre> 
-
+to evaluate a wavefile and save multi pitch output to a csv file:
+Use <pre><code>python main.py -w <i>filename</i> <i>outfile</i></code></pre> 
+to evaluate all wavefiles in a folder and save multi pitch output to a csv file:
+Use <pre><code>python main.py -w <i>foldername</i> <i>outfolder</i></code></pre> 
 <h3>Evaluation</h3> 
 
 
