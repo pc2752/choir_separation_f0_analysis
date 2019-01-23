@@ -9,6 +9,8 @@ import numpy as np
 import mir_eval
 import pandas as pd
 from random import randint
+import librosa
+import sig_process
 
 class Model(object):
     def __init__(self):
@@ -113,6 +115,7 @@ class DeepSal(Model):
         Returns features for the file based on mode (0 for hdf5 file, 1 for wav file).
         Currently, only the HDF5 version is implemented.
         """
+        # if file_name.endswith('.hdf5'):
         feat_file = h5py.File(config.feats_dir + file_name)
         atb = feat_file['atb'][()]
 
@@ -124,11 +127,30 @@ class DeepSal(Model):
 
         in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
         in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
-                                                      6, 360)
+                                                  6, 360)
         in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
-        # in_batches_atb, nchunks_in = utils.generate_overlapadd(atb)
-
         return in_batches_hcqt, atb, nchunks_in
+
+    def read_input_wav_file(self, file_name):
+        """
+        Function to read and process input file, given name and the synth_mode.
+        Returns features for the file based on mode (0 for hdf5 file, 1 for wav file).
+        Currently, only the HDF5 version is implemented.
+        """
+        audio, fs = librosa.core.load(file_name, sr=config.fs)
+        hcqt = sig_process.get_hcqt(audio)
+
+        hcqt = np.swapaxes(hcqt, 0, 1)
+
+        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
+        in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
+		                                          6, 360)
+        in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
+
+        return in_batches_hcqt, nchunks_in, hcqt.shape[0]
+
+
+
 
     def test_file(self, file_name):
         """
@@ -139,6 +161,56 @@ class DeepSal(Model):
         scores = self.extract_f0_file(file_name, sess)
         return scores
 
+    def test_wav_file(self, file_name, save_path):
+        """
+        Function to extract multi pitch from wav file.
+        """
+
+        sess = tf.Session()
+        self.load_model(sess, log_dir = config.log_dir)
+        in_batches_hcqt, nchunks_in, max_len = self.read_input_wav_file(file_name)
+        out_batches_atb = []
+        for in_batch_hcqt in in_batches_hcqt:
+            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
+            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+            out_batches_atb.append(out_atb)
+        out_batches_atb = np.array(out_batches_atb)
+        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in)
+        out_batches_atb = out_batches_atb[:max_len]
+        time_1, ori_freq = utils.process_output(out_batches_atb)
+        utils.save_multif0_output(time_1, ori_freq, save_path)
+
+
+    def test_wav_folder(self, folder_name, save_path):
+        """
+        Function to extract multi pitch from wav files in a folder
+        """
+
+        songs = next(os.walk(folder_name))[1]
+
+        sess = tf.Session()
+        self.load_model(sess, log_dir = config.log_dir)
+        count = 0
+
+        for song in songs:
+        	print ("Processing song %s" % song)
+	        file_list = [x for x in os.listdir(os.path.join(folder_name, song)) if x.endswith('.wav') and not x.startswith('.')]
+	        for file_name in file_list:
+		        in_batches_hcqt, nchunks_in, max_len = self.read_input_wav_file(os.path.join(folder_name, song, file_name))
+		        out_batches_atb = []
+		        for in_batch_hcqt in in_batches_hcqt:
+		            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
+		            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+		            out_batches_atb.append(out_atb)
+		        out_batches_atb = np.array(out_batches_atb)
+		        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
+		                         nchunks_in)
+		        out_batches_atb = out_batches_atb[:max_len]
+		        time_1, ori_freq = utils.process_output(out_batches_atb)
+		        utils.save_multif0_output(time_1, ori_freq, os.path.join(save_path,song,file_name[:-4]+'.csv'))
+		        count+=1
+		        utils.progress(count, len(file_list), suffix='evaluation done')
 
     def extract_f0_file(self, file_name, sess):
         in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
@@ -481,11 +553,12 @@ class Voc_Sep(Model):
             self.output_logits = nr_wavenet(self.input_placeholder,self.f0_placeholder, self.is_train)
 
 def test():
-    # model = DeepSal()
-    # model.test_file('locus_0101.hdf5')
+    model = DeepSal()
+    # model.test_file('nino_4424.hdf5')
+    model.test_wav_folder('./helena_test_set/', './results/')
 
-    model = Voc_Sep()
-    model.train()
+    # model = Voc_Sep()
+    # model.train()
 
 if __name__ == '__main__':
     test()

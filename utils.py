@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import config
 import scipy
+import csv
 import librosa
 
 def nan_helper(y):
@@ -134,6 +135,18 @@ def get_multif0(pitch_activation_mat, freq_grid, time_grid, thresh=0.3):
 
     est_freqs = [np.array(lst) for lst in est_freqs]
     return time_grid, est_freqs
+
+def save_multif0_output(times, freqs, output_path):
+    """
+    This function was taken from https://github.com/rabitt/ismir2017-deepsalience
+    save multif0 output to a csv file
+    """
+    with open(output_path, 'w') as fhandle:
+        csv_writer = csv.writer(fhandle, delimiter='\t')
+        for t, f in zip(times, freqs):
+            row = [t]
+            row.extend(f)
+            csv_writer.writerow(row)
 
 def process_output(atb):
     freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
