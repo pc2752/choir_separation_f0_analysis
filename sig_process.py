@@ -8,7 +8,7 @@ import h5py
 import pyworld as pw
 from reduce import sp_to_mfsc, mfsc_to_sp, ap_to_wbap,wbap_to_ap, get_warped_freqs, sp_to_mgc, mgc_to_sp, mgc_to_mfsc, mfsc_to_mgc
 from acoufe import pitch
-
+import soundfile as sf
 import config
 import utils
 
@@ -31,8 +31,43 @@ def get_hcqt(audio):
 
     return log_hcqt
 
+def f0_to_hertz(f0):
+    # if f0 == 0:
+    #     return 0
+    # else:
+    f0 = f0-69
+    f0 = f0/12
+    f0 = 2**f0
+    f0 = f0*440
+    return f0
+
+def feats_to_audio(in_feats,filename, fs=config.fs,  mode=config.comp_mode):
+    harm = in_feats[:,:60]
+    ap = in_feats[:,60:-2]
+    f0 = in_feats[:,-2:]
+    # f0[:,0] = f0[:,0]-69
+    # f0[:,0] = f0[:,0]/12
+    # f0[:,0] = 2**f0[:,0]
+    # f0[:,0] = f0[:,0]*440
+    f0[:,0] = f0_to_hertz(f0[:,0])
+
+    f0 = f0[:,0]*(1-f0[:,1])
 
 
+    if mode == 'mfsc':
+        harm = mfsc_to_mgc(harm)
+        ap = mfsc_to_mgc(ap)
+
+
+    harm = mgc_to_sp(harm, 1025, 0.45)
+    ap = mgc_to_sp(ap, 1025, 0.45)
+
+    harm = 10**(harm/10)
+    ap = 10**(ap/20)
+
+    y=pw.synthesize(f0.astype('double'),harm.astype('double'),ap.astype('double'),int(fs),config.hoptime*1000)
+    # import pdb;pdb.set_trace()
+    sf.write(filename+'.wav',y,44100)
 
 def stft_to_feats(vocals, fs, mode=config.comp_mode):
     feats=pw.wav2world(vocals,fs,frame_period=config.hoptime*1000)

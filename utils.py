@@ -4,6 +4,8 @@ import config
 import scipy
 import csv
 import librosa
+import mir_eval
+import pandas as pd
 
 def nan_helper(y):
     """Helper to handle indices and logical indices of NaNs.
@@ -25,6 +27,27 @@ def match_time(feat_list):
             new_list.append(feat_list[i][:min_time])
         feat_list = new_list
     return feat_list
+
+def csv_to_list(file_name):
+    with open(file_name, 'r') as f:
+        reader = csv.reader(f)
+        your_list = list(reader)
+        return your_list
+
+def read_f0_file(file_name):
+    ref_time, ref_freqs = mir_eval.io.load_ragged_time_series(file_name)
+    return ref_time, ref_freqs  
+
+def remove_zeros(ref_times_ori, ref_freqs_ori):
+    for i, (tms, fqs) in enumerate(zip(ref_times_ori, ref_freqs_ori)):
+        if any(fqs == 0):
+            ref_freqs_ori[i] = np.array([f for f in fqs if f > 0])
+
+    return ref_freqs_ori
+
+def save_scores_mir_eval(scores, file_name_csv):
+    scores = pd.DataFrame.from_dict(scores)
+    scores.to_csv(file_name_csv)
 
 def progress(count, total, suffix=''):
     """

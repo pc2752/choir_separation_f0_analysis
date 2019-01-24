@@ -145,8 +145,6 @@ def sep_gen(mode = 'Train', sec_mode = 0):
 
             feat_file = h5py.File(config.feats_dir + voc_file, 'r')
 
-
-
             cqt = feat_file['voc_cqt']
 
             voc_feat_file = h5py.File(config.voc_feats_dir + song_name+voc_part+voc_track+'.wav.hdf5', 'r')

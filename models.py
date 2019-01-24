@@ -11,6 +11,7 @@ import pandas as pd
 from random import randint
 import librosa
 import sig_process
+import matplotlib.pyplot as plt
 
 class Model(object):
     def __init__(self):
@@ -138,7 +139,7 @@ class DeepSal(Model):
         Currently, only the HDF5 version is implemented.
         """
         audio, fs = librosa.core.load(file_name, sr=config.fs)
-        hcqt = sig_process.get_hcqt(audio)
+        hcqt = sig_process.get_hcqt(audio/4)
 
         hcqt = np.swapaxes(hcqt, 0, 1)
 
@@ -191,9 +192,10 @@ class DeepSal(Model):
 
         sess = tf.Session()
         self.load_model(sess, log_dir = config.log_dir)
-        count = 0
+        
 
         for song in songs:
+        	count = 0
         	print ("Processing song %s" % song)
 	        file_list = [x for x in os.listdir(os.path.join(folder_name, song)) if x.endswith('.wav') and not x.startswith('.')]
 	        for file_name in file_list:
@@ -343,8 +345,7 @@ class DeepSal(Model):
                 # import pdb;pdb.set_trace()
             count += 1
             utils.progress(count, len(val_list), suffix='validation done')
-        scores = pd.DataFrame.from_dict(scores)
-        scores.to_csv(file_name_csv)
+        utils.save_scores_mir_eval(scores, file_name_csv)
 
         return scores
 
@@ -385,42 +386,98 @@ class Voc_Sep(Model):
         Returns features for the file based on mode (0 for hdf5 file, 1 for wav file).
         Currently, only the HDF5 version is implemented.
         """
-        feat_file = h5py.File(config.feats_dir + file_name)
-        atb = feat_file['atb'][()]
+        feat_file = h5py.File(config.feats_dir + file_name, 'r')
 
-        atb = atb[:, 1:]
-
-        hcqt = feat_file['voc_hcqt'][()]
+        cqt = abs(feat_file['voc_cqt'][()])
 
         feat_file.close()
 
-        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
-        in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
-                                                      6, 360)
-        in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
-        # in_batches_atb, nchunks_in = utils.generate_overlapadd(atb)
-
-        return in_batches_hcqt, atb, nchunks_in
+        return cqt
 
 
-    def extract_f0_file(self, file_name, sess):
-        in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
-        out_batches_atb = []
-        for in_batch_hcqt in in_batches_hcqt:
-            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
-            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
-            out_batches_atb.append(out_atb)
-        out_batches_atb = np.array(out_batches_atb)
-        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
-                         nchunks_in)
-        out_batches_atb = out_batches_atb[:atb.shape[0]]
-        time_1, ori_freq = utils.process_output(atb)
-        time_2, est_freq = utils.process_output(out_batches_atb)
+    def extract_part_from_file(self, file_name, part, sess):
 
-        scores = mir_eval.multipitch.evaluate(time_1, ori_freq, time_2, est_freq)
-        return scores
+        parts = ['_soprano_', '_alto_', '_bass_', '_tenor_']
+
+        cqt = self.read_input_file(file_name)
+
+        song_name = file_name.split('_')[0]
+
+        voc_num = 9-part
+        voc_part = parts[part]
+        voc_track= file_name[-voc_num]
+
+        voc_feat_file = h5py.File(config.voc_feats_dir + song_name + voc_part + voc_track + '.wav.hdf5', 'r')
+
+        voc_feats = voc_feat_file["voc_feats"][()]
+
+        voc_feats[np.argwhere(np.isnan(voc_feats))] = 0.0
+
+        atb = voc_feat_file['atb'][()]
+
+        atb = atb[:, 1:]
+
+        atb[:, 0:4] = 0
+
+        atb = np.clip(atb, 0.0, 1.0)
+
+        max_len = min(len(voc_feats), len(cqt))
+
+        voc_feats = voc_feats[:max_len]
+
+        cqt = cqt[:max_len]
+
+        atb = atb[:max_len]
+
+        # voc_feats = (voc_feats - min_feat) / (max_feat - min_feat)
+        #
+        # voc_feats = np.clip(voc_feats[:, :, :-2], 0.0, 0.1)
+
+        # sig_process.feats_to_audio(voc_feats, 'booboo.wav')
+
+        in_batches_cqt, nchunks_in = utils.generate_overlapadd(cqt)
+
+        in_batches_atb, nchunks_in = utils.generate_overlapadd(atb)
 
         # import pdb;pdb.set_trace()
+        out_batches_feats = []
+        for in_batch_cqt, in_batch_atb in zip(in_batches_cqt, in_batches_atb):
+            feed_dict = {self.input_placeholder: in_batch_cqt, self.f0_placeholder: in_batch_atb, self.is_train: False}
+            out_feat = sess.run(self.output_logits, feed_dict=feed_dict)
+            out_batches_feats.append(out_feat)
+
+
+        out_batches_feats = np.array(out_batches_feats)
+
+
+        out_feats = utils.overlapadd(out_batches_feats.reshape(out_batches_feats.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in)
+
+        out_feats = out_feats * (max_feat - min_feat) + min_feat
+
+        out_feats = out_feats[:max_len]
+
+        out_feats = np.concatenate((out_feats, voc_feats[:, -2:]), axis=-1)
+
+        plt.figure(1)
+        plt.subplot(211)
+        plt.imshow(voc_feats.T, origin = 'lower', aspect = 'auto')
+        plt.subplot(212)
+        plt.imshow(out_feats.T, origin='lower', aspect='auto')
+        plt.show()
+
+
+        sig_process.feats_to_audio(out_feats, 'extracted.wav')
+
+
+        import pdb;pdb.set_trace()
+
+        # import pdb;pdb.set_trace()
+
+    def extract_file(self, file_name, part):
+        sess = tf.Session()
+        self.load_model(sess, config.log_dir_sep)
+        self.extract_part_from_file(file_name, part, sess)
 
     def train(self):
         """
@@ -553,12 +610,12 @@ class Voc_Sep(Model):
             self.output_logits = nr_wavenet(self.input_placeholder,self.f0_placeholder, self.is_train)
 
 def test():
-    model = DeepSal()
-    # model.test_file('nino_4424.hdf5')
-    model.test_wav_folder('./helena_test_set/', './results/')
+    # model = DeepSal()
+    # # model.test_file('nino_4424.hdf5')
+    # model.test_wav_folder('./helena_test_set/', './results/')
 
-    # model = Voc_Sep()
-    # model.train()
+    model = Voc_Sep()
+    model.extract_file('locus_0024.hdf5', 3)
 
 if __name__ == '__main__':
     test()
