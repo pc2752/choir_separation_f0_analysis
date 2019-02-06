@@ -14,20 +14,38 @@ import config
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
-def DeepConvSep(input_, feat_size = 513, time_context = 30):
+def DeepConvSep_decode(encoded, shape1, shape2, shape3, name = "Decode"):
+
+    encoded_2_1 = tf.layers.dense(encoded, int(shape1[1]) * int(shape1[2]) * int(shape1[3]), name = name+"_1")
+
+    encoded_2_1_re = tf.reshape(encoded_2_1, shape1, name = name+"_2")
+
+    deconv1 = deconv2d(encoded_2_1_re, shape2, name = name+"_3")
+
+    deconv2 = tf.nn.relu(deconv2d(deconv1, shape3, name = name+"_4"))
+
+    return deconv2
+
+
+
+def DeepConvSep(input_, feat_size = 513, time_context = 30, num_source = 2):
+
     conv1 = tf.layers.conv2d(input_, 50, (1, feat_size), strides=(1, 1), padding='valid', name="F_1", activation = None)
 
     conv2 = tf.layers.conv2d(conv1, 50, (int(time_context/2),1), strides=(1,1),  padding = 'valid', name = "F_2", activation = None)
 
-    encoded = tf.layers.dense(conv2, 128, name = "encoded")
+    conv2_1 = tf.reshape(conv2, (config.batch_size, -1))
 
-    encoded_2 = tf.layers.dense(encoded, conv2_shape, name = "encoded_1")
+    encoded = tf.layers.dense(conv2_1, 128, name = "encoded")
 
-    deconv1 = deconv2d(encoded_2, shape)
+    outs = []
 
-    deconv2 = deconv2d(deconv2, shape_2, activation=tf.nn.relu)
+    for source in range(num_source):
+        outs.append(DeepConvSep_decode(encoded, conv2.get_shape(), conv1.get_shape(), input_.get_shape(), name = "Decode"+str(source)))
 
-    return deconv2
+    output = tf.squeeze(tf.stack(outs, axis = -1))
+
+    return output
 
 
 def DeepSalience(input_, is_train):
@@ -147,4 +165,8 @@ def nr_wavenet(inputs, f0, is_train):
 
 
 if __name__ == '__main__':
-  main()
+    input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len,513,1),
+                                            name='input_placeholder')
+    output_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, 1),
+                                             name='output_placeholder')
+    haha = DeepConvSep(input_placeholder)

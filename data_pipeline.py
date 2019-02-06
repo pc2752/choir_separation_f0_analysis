@@ -53,13 +53,10 @@ def data_gen(mode = 'Train', sec_mode = 0):
             voc_index = np.random.randint(0, len(file_list))
             voc_file = file_list[voc_index]
             # atb, hcqt = process_file(voc_file)
-            feat_file = h5py.File(config.feats_dir + voc_file, 'r')
+            feat_file = h5py.File(config.feats_dir_2 + voc_file, 'r')
 
             atb = feat_file['atb']
 
-            atb = atb[:, 1:]
-
-            atb[:, 0:4] = 0
 
             atb = np.clip(atb, 0.0, 1.0)
 
