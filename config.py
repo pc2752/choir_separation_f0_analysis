@@ -6,7 +6,7 @@ import os
 wav_dir = '../datasets/ChoralSingingDataset/'
 
 
-feats_dir = './feats/'
+feats_dir = './feats_full_res/'
 voc_feats_dir = './voc_feats/'
 
 
@@ -20,14 +20,15 @@ window = np.hanning(nfft)
 
 #CQT Parameters
 fmin = 32.70
-bins_per_octave = 24
+bins_per_octave = 60
+# bins_per_octave = 24
 n_octaves = 6
 cqt_bins = bins_per_octave*n_octaves
 harmonics = [0.5, 1, 2, 3, 4, 5]
 
 comp_mode = 'mfsc'
 
-feats_dir_2 = './feats/'
+feats_dir_2 = './feats_full_res/'
 
 # Model parameters
 batch_size = 5

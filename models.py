@@ -31,7 +31,30 @@ class Model(object):
         """
         Function to extract multi pitch from file, for validation. Currently supports only HDF5 files.
         """
-        scores = self.extract_f0_file(file_name, sess)
+
+
+        in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
+        out_batches_atb = []
+        for in_batch_hcqt in in_batches_hcqt:
+            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
+            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+            out_batches_atb.append(out_atb)
+        out_batches_atb = np.array(out_batches_atb)
+        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in)
+        out_batches_atb = out_batches_atb[:atb.shape[0]]
+
+        baba = np.mean(np.equal(np.round(atb[atb>0]), np.round(out_batches_atb[atb>0])))
+
+        atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
+
+        #
+        time_1, ori_freq = utils.process_output(atb)
+        time_2, est_freq = utils.process_output(out_batches_atb)
+
+
+        scores = mir_eval.multipitch.evaluate(time_1, ori_freq, time_2, est_freq)
+
         pre = scores['Precision']
         acc = scores['Accuracy']
         rec = scores['Recall']
