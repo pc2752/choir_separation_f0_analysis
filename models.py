@@ -12,6 +12,7 @@ from random import randint
 import librosa
 import sig_process
 import matplotlib.pyplot as plt
+from scipy.ndimage import filters
 
 class Model(object):
     def __init__(self):
@@ -42,8 +43,8 @@ class Model(object):
         Depending on the mode, can return placeholders for either just the generator or both the generator and discriminator.
         """
 
-        self.input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, 360, 6),name='input_placeholder')
-        self.output_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, 360),name='output_placeholder')
+        self.input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, config.cqt_bins, 6),name='input_placeholder')
+        self.output_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, config.cqt_bins),name='output_placeholder')
         self.is_train = tf.placeholder(tf.bool, name="is_train")
 
     def load_model(self, sess, log_dir):
@@ -110,7 +111,7 @@ class DeepSal(Model):
         returns the loss function for the model, based on the mode. 
         """
         self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder, logits = self.output_logits))
-        self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round( self.output_placeholder ), tf.round(self.outputs)), tf.float32))
+        self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round( self.output_placeholder ), tf.round(self.outputs)), tf.float32)*self.output_placeholder)
 
     def read_input_file(self, file_name):
         """
@@ -128,9 +129,9 @@ class DeepSal(Model):
 
         feat_file.close()
 
-        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
+        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*config.cqt_bins))
         in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
-                                                  6, 360)
+                                                  6, config.cqt_bins)
         in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
         return in_batches_hcqt, atb, nchunks_in
 
@@ -145,9 +146,9 @@ class DeepSal(Model):
 
         hcqt = np.swapaxes(hcqt, 0, 1)
 
-        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*360))
+        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*config.cqt_bins))
         in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
-		                                          6, 360)
+		                                          6, config.cqt_bins)
         in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
 
         return in_batches_hcqt, nchunks_in, hcqt.shape[0]
@@ -222,6 +223,14 @@ class DeepSal(Model):
 		        utils.progress(count, len(file_list), suffix='evaluation done')
 
     def extract_f0_file(self, file_name, sess):
+        if file_name in config.val_list:
+            mode = "Val"
+        else:
+            mode = "Train"
+        num_singers = file_name.count('1')
+        song_name = file_name.split('_')[0].capitalize()
+        voice = config.log_dir.split('_')[-1][:-1].capitalize()
+
         in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
         out_batches_atb = []
         for in_batch_hcqt in in_batches_hcqt:
@@ -233,18 +242,42 @@ class DeepSal(Model):
                          nchunks_in)
         out_batches_atb = out_batches_atb[:atb.shape[0]]
 
-        baba = np.mean(np.equal(np.round(atb), np.round(out_batches_atb)))
+        baba = np.mean(np.equal(np.round(atb[atb>0]), np.round(out_batches_atb[atb>0])))
 
-        import pdb;
-        pdb.set_trace()
+        atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
+
 
         plt.figure(1)
+        plt.suptitle("Note Probabilities for song {}, voice {}, with {} singers, from the {} set".format(song_name, voice,num_singers, mode) + "bin activation accuracy: {0:.0%}".format(baba), fontsize=10)
         ax1 = plt.subplot(211)
-        plt.imshow(atb.T, origin = 'lower', aspect = 'auto')
-        plt.subplot(212, sharex = ax1, sharey=ax1)
-        plt.imshow(out_batches_atb.T, origin='lower', aspect='auto')
+
+        plt.imshow(np.round(atb.T), origin = 'lower', aspect = 'auto')
+
+        ax1.set_title("Ground Truth Note Probabilities (10 cents per bin)", fontsize=10)
+        ax2 = plt.subplot(212, sharex = ax1, sharey=ax1)
+        plt.imshow(np.round(out_batches_atb.T), origin='lower', aspect='auto')
+        ax2.set_title("Output Note Probabilities (10 cents per bin)", fontsize=10)
         plt.show()
-        import pdb;pdb.set_trace()
+
+        cont = utils.query_yes_no("Do you want to see probability distribution per frame? Default No", default = "no")
+
+        while cont:
+
+            num_sings = int(input("How many distinct pitches per frame to plot. Default {}".format(num_singers)) or num_singers)
+
+
+            index = np.random.choice(np.where(atb.sum(axis=1)==num_sings)[0])
+            plt.figure(1)
+            plt.suptitle("Probability Distribution For one of the Frames With {} Distinct Pitches in GT".format(num_singers))
+            ax1 = plt.subplot(211)
+            ax1.set_title("Ground Truth Probability Distribution Across Frame", fontsize=10)
+            plt.plot(np.round(atb[index]))
+            ax2 = plt.subplot(212, sharex = ax1, sharey = ax1)
+            plt.plot(np.round(out_batches_atb[index]))
+            ax2.set_title("Output Probability Distribution Across Frame", fontsize=10)
+            plt.show()
+            cont = utils.query_yes_no("Do you want to see probability distribution per frame? Default No", default="no")
+
         #
         time_1, ori_freq = utils.process_output(atb)
         time_2, est_freq = utils.process_output(out_batches_atb)
@@ -308,21 +341,24 @@ class DeepSal(Model):
             if (epoch + 1) % config.validate_every == 0:
                 batch_num = 0
                 with tf.variable_scope('Validation'):
-                    for ins, outs in val_generator:
-                        step_loss, step_acc, summary_str = self.validate_model(ins, outs, sess)
-                        epoch_val_loss += step_loss
-                        epoch_val_acc += step_acc
+                    pre_score, acc_score, rec_score = self.validate_model(sess)
 
-                        self.val_summary_writer.add_summary(summary_str, epoch)
-                        self.val_summary_writer.flush()
-                        batch_num+=1
+                    # for ins, outs in val_generator:
+                    #     step_loss, step_acc, summary_str = self.validate_model(ins, outs, sess)
+                    #     epoch_val_loss += step_loss
+                    #     epoch_val_acc += step_acc
 
-                        utils.progress(batch_num, config.batches_per_epoch_val, suffix='validation done')
+                    #     self.val_summary_writer.add_summary(summary_str, epoch)
+                    #     self.val_summary_writer.flush()
+                    #     batch_num+=1
 
-                    epoch_val_loss = epoch_val_loss / batch_num
-                    epoch_val_acc = epoch_val_acc / batch_num
-                    print_dict["Validation Loss"] = epoch_val_loss
-                    print_dict["Validation Accuracy"] = epoch_val_acc
+                    #     utils.progress(batch_num, config.batches_per_epoch_val, suffix='validation done')
+
+                    # epoch_val_loss = epoch_val_loss / batch_num
+                    # epoch_val_acc = epoch_val_acc / batch_num
+                    print_dict["Validation Precision"] = pre_score
+                    print_dict["Validation Accuracy"] = acc_score
+                    print_dict["Validation Recall"] = rec_score
 
 
             end_time = time.time()
@@ -342,31 +378,32 @@ class DeepSal(Model):
 
         return step_loss, step_acc, summary_str
 
-    def validate_model(self,ins, outs, sess):
+    def validate_model(self, sess):
         """
         Function to train the model for each epoch
         """
-        feed_dict = {self.input_placeholder: ins, self.output_placeholder: outs, self.is_train: False}
+        # feed_dict = {self.input_placeholder: ins, self.output_placeholder: outs, self.is_train: False}
 
-        step_loss, step_acc = sess.run([self.loss, self.accuracy], feed_dict=feed_dict)
-        summary_str = sess.run(self.summary, feed_dict=feed_dict)
-        return step_loss, step_acc, summary_str
-        # val_list = config.val_list
+        # step_loss, step_acc = sess.run([self.loss, self.accuracy], feed_dict=feed_dict)
+        # summary_str = sess.run(self.summary, feed_dict=feed_dict)
+        # return step_loss, step_acc, summary_str
+        val_list = config.val_list
         # start_index = randint(0,len(val_list)-(config.batches_per_epoch_val+1))
-        # pre_scores = []
-        # acc_scores = []
-        # rec_scores = []
-        # count = 0
-        # for file_name in val_list[start_index:start_index+config.batches_per_epoch_val]:
-        #     pre, acc, rec = self.validate_file(file_name, sess)
-        #     pre_scores.append(pre)
-        #     acc_scores.append(acc)
-        #     rec_scores.append(rec)
-        #     count+=1
-        #     utils.progress(count, config.batches_per_epoch_val, suffix='validation done')
-        # pre_score = np.array(pre_scores).mean()
-        # acc_score = np.array(acc_scores).mean()
-        # rec_score = np.array(rec_scores).mean()
+        pre_scores = []
+        acc_scores = []
+        rec_scores = []
+        count = 0
+        for file_name in val_list:
+            # [start_index:start_index+config.batches_per_epoch_val]
+            pre, acc, rec = self.validate_file(file_name, sess)
+            pre_scores.append(pre)
+            acc_scores.append(acc)
+            rec_scores.append(rec)
+            count+=1
+            utils.progress(count, config.batches_per_epoch_val, suffix='validation done')
+        pre_score = np.array(pre_scores).mean()
+        acc_score = np.array(acc_scores).mean()
+        rec_score = np.array(rec_scores).mean()
         return pre_score, acc_score, rec_score
 
     def eval_all(self, file_name_csv):

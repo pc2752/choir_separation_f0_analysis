@@ -17,13 +17,13 @@ import librosa
 
 
 
-def get_hcqt(audio):
+def get_hcqt(audio, fmin = config.fmin):
 
     cqt_list = []
     shapes = []
     for h in config.harmonics:
         
-        cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = config.fmin*float(h), bins_per_octave = config.bins_per_octave)
+        cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = fmin*float(h), bins_per_octave = config.bins_per_octave_2)
         cqt_list.append(cqt.T)
 
     cqt_list = utils.match_time(cqt_list)
@@ -100,7 +100,7 @@ def stft_to_feats(vocals, fs, mode=config.comp_mode):
 
     return out_feats
 
-def get_feats(audio):
+def get_feats(audio, fmin = config.fmin):
 
 
 
@@ -110,9 +110,9 @@ def get_feats(audio):
 
     # voc_stft_phase = np.angle(voc_stft)
 
-    cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = config.fmin, bins_per_octave = config.bins_per_octave).T
+    cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = fmin, bins_per_octave = config.bins_per_octave).T
 
-    hcqt = get_hcqt(audio)
+    hcqt = get_hcqt(audio, fmin = fmin)
 
     hcqt = np.swapaxes(hcqt, 0,1)
 

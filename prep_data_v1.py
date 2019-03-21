@@ -29,7 +29,7 @@ def process_f0(f0, f_bins, n_freqs):
 
     freqz[range(len(haha)), haha] = 1
 
-    # atb = filters.gaussian_filter1d(freqz.T, 1, axis=0, mode='constant').T
+    atb = filters.gaussian_filter1d(freqz.T, 1, axis=0, mode='constant').T
 
     atb = freqz
 
@@ -49,7 +49,6 @@ def grid_to_bins(grid, start_bin_val, end_bin_val):
     bin_centers = (grid[1:] + grid[:-1])/2.0
     bins = np.concatenate([[start_bin_val], bin_centers, [end_bin_val]])
     return bins
-
 def prep_deepsalience():
     x = [0,2,3,4]
 
@@ -126,9 +125,12 @@ def prep_deepsalience():
                 num_sources = 4 - combo.count(0)
                 audio = audio/num_sources
 
+
                 voc_stft, voc_cqt, voc_hcqt = sig_process.get_feats(audio)
 
                 assert voc_stft.shape[0] == atb.shape[0]
+
+                # import pdb;pdb.set_trace()
 
 
 
@@ -160,6 +162,45 @@ def prep_deepsalience():
             count+=1
 
             utils.progress(count,len(combos))
+def prep_quartet():
+
+
+    songs = next(os.walk(config.wav_dir))[1]
+    freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
+
+
+    f_bins = grid_to_bins(freq_grid, 0.0, freq_grid[-1])
+
+    n_freqs = len(freq_grid)
+
+
+    for song in songs:
+        print ("Processing song %s" % song)
+        song_dir = config.wav_dir+song+'/IndividualVoices/'
+        singers = [x for x in os.listdir(song_dir) if x.endswith('.wav') and not x.startswith('.')]
+
+        count = 0
+
+        for singer in singers:
+
+            try:
+                audio_sop, fs = librosa.core.load(os.path.join(song_dir,singer), sr = config.fs)
+                f0 = pitch.extract_f0_sac(audio_sop, fs, config.hoptime).reshape(-1,1)
+                atb_sop = process_f0(f0, f_bins, n_freqs)
+                if count == 0:
+                    audio = audio_sop
+                    atb = atb_sop
+                else:
+                    audio = audio[:len(audio_sop)] + audio_sop[:len(audio)]
+                    atb = atb[:len(atb_sop)] + atb_sop[:len(atb)]
+            except:
+                continue
+            count+=1
+
+            utils.progress(count, len(singers))
+
+        import pdb;pdb.set_trace()
+
 
 def prep_voc_sep():
 
@@ -284,6 +325,8 @@ def prep_phase2(mode = 'alto'):
 
         for combo in combos:
 
+            combo = [1,1,1,1]
+
             combo_str = str(combo[0]) + str(combo[1]) + str(combo[2]) + str(combo[3])
             combo = [1,1,1,1]
 
@@ -330,13 +373,18 @@ def prep_phase2(mode = 'alto'):
 
             atb[atb>1] = 1
 
+            index = np.random.choice(np.where(atb.sum(axis=1) == 4)[0])
+
+            # import pdb;
+            # pdb.set_trace()
+
             # plt.imshow(atb.T, origin='lower', aspect='auto')
             # plt.show()
             # import pdb;
             # pdb.set_trace()
 
 
-            voc_stft, voc_cqt, voc_hcqt = sig_process.get_feats(audio)
+            voc_stft, voc_cqt, voc_hcqt = sig_process.get_feats(audio, config.min_max[mode][0])
 
             assert voc_stft.shape[0] == atb.shape[0]
 
@@ -373,5 +421,5 @@ def prep_phase2(mode = 'alto'):
 if __name__ == '__main__':
     # get_min_max_freqs()
     # prep_voc_sep()
-    # prep_deepsalience()
-    prep_phase2()
+    prep_deepsalience()
+    # prep_quartet()

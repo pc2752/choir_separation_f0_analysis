@@ -55,7 +55,10 @@ def data_gen(mode = 'Train', sec_mode = 0):
             # atb, hcqt = process_file(voc_file)
             feat_file = h5py.File(config.feats_dir_2 + voc_file, 'r')
 
-            atb = feat_file['atb']
+            atb = feat_file['atb'][()]
+
+            atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
+
 
 
             atb = np.clip(atb, 0.0, 1.0)
@@ -272,7 +275,7 @@ def get_stats_phonems():
 def main():
     # gen_train_val()
     # get_stats()
-    gen = sep_gen('Train', sec_mode = 0)
+    gen = data_gen('Train', sec_mode = 0)
     while True :
         start_time = time.time()
         ins, outs, feats = next(gen)
