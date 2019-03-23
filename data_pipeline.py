@@ -57,11 +57,11 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
             atb = feat_file['atb'][()]
 
-            atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
+            # atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
 
 
 
-            atb = np.clip(atb, 0.0, 1.0)
+            # atb = np.clip(atb, 0.0, 1.0)
 
             hcqt = feat_file['voc_hcqt']
 

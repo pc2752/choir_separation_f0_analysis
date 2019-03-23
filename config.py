@@ -28,13 +28,13 @@ harmonics = [0.5, 1, 2, 3, 4, 5]
 
 comp_mode = 'mfsc'
 
-feats_dir_2 = './feats_full_res/'
+feats_dir_2 = feats_dir
 
 # Model parameters
 batch_size = 5
 max_phr_len = 50
 max_models_to_keep = 10
-log_dir = './log_res_half/'
+log_dir = './log_res_full/'
 init_lr = 0.0001
 batches_per_epoch_train = 100
 batches_per_epoch_val = 10

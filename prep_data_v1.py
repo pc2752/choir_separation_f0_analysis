@@ -50,15 +50,15 @@ def grid_to_bins(grid, start_bin_val, end_bin_val):
     bins = np.concatenate([[start_bin_val], bin_centers, [end_bin_val]])
     return bins
 def prep_deepsalience():
-    x = [0,2,3,4]
+    x = [0,1,2,3,4]
 
     combos = [p for p in itertools.product(x, repeat=4)]
 
     combos = combos[1:]
 
-    combos_2 = [p for p in itertools.product([0, 1], repeat=4)]
+    # combos_2 = [p for p in itertools.product([0, 1], repeat=4)]
 
-    combos = combos + combos_2[1:]
+    # combos = combos + combos_2[1:]
 
     songs = next(os.walk(config.wav_dir))[1]
     freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
