@@ -1,5 +1,5 @@
 import tensorflow as tf
-from modules_tf import DeepSalience, nr_wavenet
+from modules_tf import DeepSalience_1, DeepSalience_2
 import config
 from data_pipeline import data_gen, sep_gen
 import time, os
@@ -13,6 +13,8 @@ import librosa
 import sig_process
 import matplotlib.pyplot as plt
 from scipy.ndimage import filters
+
+
 
 class Model(object):
     def __init__(self):
@@ -66,8 +68,9 @@ class Model(object):
         Depending on the mode, can return placeholders for either just the generator or both the generator and discriminator.
         """
 
-        self.input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, config.cqt_bins, 6),name='input_placeholder')
-        self.output_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, config.cqt_bins),name='output_placeholder')
+        self.input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, config.cqt_bins),name='input_placeholder')
+        self.output_placeholder_1 = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, 4),name='output_placeholder_1')
+        self.output_placeholder_2 = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, 4),name='output_placeholder_2')
         self.is_train = tf.placeholder(tf.bool, name="is_train")
 
     def load_model(self, sess, log_dir):
@@ -94,10 +97,13 @@ class Model(object):
         Returns the optimizers for the model, based on the loss functions and the mode. 
         """
         self.optimizer = tf.train.AdamOptimizer(learning_rate = config.init_lr)
+        self.optimizer_2 = tf.train.AdamOptimizer(learning_rate = config.init_lr)
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        self.global_step_2 = tf.Variable(0, name='global_step_2', trainable=False)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             self.train_function = self.optimizer.minimize(self.loss, global_step = self.global_step)
+            self.train_function_2 = self.optimizer_2.minimize(self.nll, global_step = self.global_step_2)
 
 
     def get_summary(self, sess, log_dir):
@@ -133,8 +139,9 @@ class DeepSal(Model):
         """
         returns the loss function for the model, based on the mode. 
         """
-        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder, logits = self.output_logits))
-        self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round( self.output_placeholder ), tf.round(self.outputs)), tf.float32)*self.output_placeholder)
+        self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder_1, logits = self.output_logits_1))
+        self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round( self.output_placeholder_1 ), tf.round(self.outputs_1)), tf.float32)*self.output_placeholder_1)
+        self.nll = utils.nll_gaussian(self.output_mean*self.output_placeholder_1, self.output_std*self.output_placeholder_1, self.output_placeholder_2)
 
     def read_input_file(self, file_name):
         """
@@ -337,15 +344,18 @@ class DeepSal(Model):
 
 
             batch_num = 0
-            epoch_train_loss = 0
-            epoch_train_acc = 0
+            epoch_train_loss_1 = 0
+            epoch_train_acc_1 = 0
+            epoch_train_loss_2 = 0
+            epoch_train_acc_2 = 0
+
             epoch_val_loss = 0
             epoch_val_acc = 0
 
             with tf.variable_scope('Training'):
-                for ins, outs in data_generator:
+                for cqt, f0, zeros in data_generator:
 
-                    step_loss, step_acc, summary_str = self.train_model(ins, outs, sess)
+                    step_loss, step_acc, summary_str = self.train_model(cqt, f0, zeros, sess)
                     epoch_train_loss+=step_loss
                     epoch_train_acc+=step_acc
 
@@ -390,13 +400,16 @@ class DeepSal(Model):
             if (epoch + 1) % config.save_every == 0 or (epoch + 1) == config.num_epochs:
                 self.save_model(sess, epoch+1, config.log_dir)
 
-    def train_model(self, ins, outs, sess):
+    def train_model(self,cqt, f0, zeros, sess):
         """
         Function to train the model for each epoch
         """
-        feed_dict = {self.input_placeholder: ins, self.output_placeholder: outs, self.is_train: True}
-        _, step_loss, step_acc = sess.run(
-            [self.train_function, self.loss, self.accuracy], feed_dict=feed_dict)
+        feed_dict = {self.input_placeholder: cqt, self.output_placeholder_1: zeros, self.output_placeholder_2: f0, self.is_train: True}
+        # _,_, step_loss_1, step_acc_1, step_loss_2 = sess.run(
+        #     [self.train_function, self.train_function_2, self.loss, self.accuracy, self.nll], feed_dict=feed_dict)
+        import pdb;pdb.set_trace()
+
+        booboo, baba = sess.run ([self.output_mean, self.output_std ], feed_dict=feed_dict )
         summary_str = sess.run(self.summary, feed_dict=feed_dict)
 
         return step_loss, step_acc, summary_str
@@ -460,9 +473,13 @@ class DeepSal(Model):
         Defined in modules.
 
         """
-        with tf.variable_scope('Model') as scope:
-            self.output_logits = DeepSalience(self.input_placeholder, self.is_train)
-            self.outputs = tf.nn.sigmoid(self.output_logits)
+        with tf.variable_scope('Model_1') as scope:
+            self.output_logits_1 = DeepSalience_1(self.input_placeholder, self.is_train)
+            self.outputs_1 = tf.nn.sigmoid(self.output_logits_1)
+        with tf.variable_scope('Model_2') as scope:
+            self.output_mean, self.output_std = DeepSalience_2(self.input_placeholder, self.is_train)
+            # self.output_mean = self.output_mean * self.outputs_1
+            # self.output_std = self.output_std * self.outputs_1
 
 
 class Voc_Sep(Model):

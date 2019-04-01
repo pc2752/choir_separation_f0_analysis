@@ -48,30 +48,72 @@ def DeepConvSep(input_, feat_size = 513, time_context = 30, num_source = 2):
     return output
 
 
-def DeepSalience(input_, is_train):
-    conv1 = tf.layers.conv2d(input_, 128, (5, 5), strides=(1, 1), padding='same', name="conv_1", activation = tf.nn.relu)
+def DeepSalience_1(input_, is_train):
+
+    input_ = tf.layers.dense(input_, 256, name = "F_in")
+
+    input_ = tf.reshape(input_, [config.batch_size, config.max_phr_len, 1, -1])
+
+    conv1 = tf.layers.conv2d(input_, 128, (5, 1), strides=(1, 1), padding='same', name="conv_1", activation = tf.nn.relu)
 
     conv1 = tf.layers.batch_normalization(conv1, training=is_train)
 
-    conv2 = tf.layers.conv2d(conv1, 64, (5, 5), strides=(1, 1), padding='same', name="conv_2", activation = tf.nn.relu)
+    conv2 = tf.layers.conv2d(conv1, 64, (5, 1), strides=(1, 1), padding='same', name="conv_2", activation = tf.nn.relu)
 
     conv2 = tf.layers.batch_normalization(conv2, training=is_train)
 
-    conv3 = tf.layers.conv2d(conv2, 64, (3, 3), strides=(1, 1), padding='same', name="conv_3", activation = tf.nn.relu)
+    conv3 = tf.layers.conv2d(conv2, 64, (3, 1), strides=(1, 1), padding='same', name="conv_3", activation = tf.nn.relu)
 
     conv3 = tf.layers.batch_normalization(conv3, training=is_train)
 
-    conv4 = tf.layers.conv2d(conv3, 64, (3, 3), strides=(1, 1), padding='same', name="conv_4", activation = tf.nn.relu)
+    conv4 = tf.layers.conv2d(conv3, 64, (3, 1), strides=(1, 1), padding='same', name="conv_4", activation = tf.nn.relu)
 
     conv4 = tf.layers.batch_normalization(conv4, training=is_train)
 
-    conv5 = tf.layers.conv2d(conv4, 64, (3, 70), strides=(1, 1), padding='same', name="conv_5", activation = tf.nn.relu)
+    conv5 = tf.layers.conv2d(conv4, 64, (3, 1), strides=(1, 1), padding='same', name="conv_5", activation = tf.nn.relu)
 
     conv5 = tf.layers.batch_normalization(conv5, training=is_train)
 
-    final_layer = tf.layers.conv2d(conv5, 1, (1, 1), strides=(1, 1), padding='same', name="conv_6", activation = None)
+    final_layer = tf.layers.conv2d(conv5, 4, (1, 1), strides=(1, 1), padding='same', name="conv_6", activation = None)
 
     return tf.squeeze(final_layer)
+
+
+def DeepSalience_2(input_, is_train):
+
+    input_ = tf.layers.dense(input_, 256, name = "F_in")
+
+    input_ = tf.reshape(input_, [config.batch_size, config.max_phr_len, 1, -1])
+
+    conv1 = tf.layers.conv2d(input_, 128, (5, 1), strides=(1, 1), padding='same', name="conv_1", activation = tf.nn.relu)
+
+    conv1 = tf.layers.batch_normalization(conv1, training=is_train)
+
+    conv2 = tf.layers.conv2d(conv1, 64, (5, 1), strides=(1, 1), padding='same', name="conv_2", activation = tf.nn.relu)
+
+    conv2 = tf.layers.batch_normalization(conv2, training=is_train)
+
+    conv3 = tf.layers.conv2d(conv2, 64, (3, 1), strides=(1, 1), padding='same', name="conv_3", activation = tf.nn.relu)
+
+    conv3 = tf.layers.batch_normalization(conv3, training=is_train)
+
+    conv4 = tf.layers.conv2d(conv3, 64, (3, 1), strides=(1, 1), padding='same', name="conv_4", activation = tf.nn.relu)
+
+    conv4 = tf.layers.batch_normalization(conv4, training=is_train)
+
+    conv5_m = tf.layers.conv2d(conv4, 64, (3, 1), strides=(1, 1), padding='same', name="conv_5_m", activation = tf.nn.relu)
+
+    conv5_m = tf.layers.batch_normalization(conv5_m, training=is_train)
+
+    conv5_s = tf.layers.conv2d(conv4, 64, (3, 1), strides=(1, 1), padding='same', name="conv_5_s", activation = tf.nn.relu)
+
+    conv5_s = tf.layers.batch_normalization(conv5_s, training=is_train)
+
+    final_layer_m = tf.layers.conv2d(conv5_m, 4, (1, 1), strides=(1, 1), padding='same', name="conv_6_m", activation = None)
+
+    final_layer_s = tf.layers.conv2d(conv5_m, 4, (1, 1), strides=(1, 1), padding='same', name="conv_6_s", activation = None)
+
+    return tf.squeeze(final_layer_m), tf.squeeze(tf.clip_by_value(t=tf.exp(final_layer_s),clip_value_min=tf.constant(1E-4),clip_value_max=tf.constant(1E+100)))
 
 def deconv2d(input_, output_shape,
        k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
@@ -165,8 +207,12 @@ def nr_wavenet(inputs, f0, is_train):
 
 
 if __name__ == '__main__':
-    input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len,513,1),
+    input_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, config.cqt_bins),
                                             name='input_placeholder')
     output_placeholder = tf.placeholder(tf.float32, shape=(config.batch_size, config.max_phr_len, 1),
                                              name='output_placeholder')
-    haha = DeepConvSep(input_placeholder)
+    is_train = tf.placeholder(tf.bool, name="is_train")
+
+    haha, baba = DeepSalience_2(input_placeholder, is_train)
+
+    import pdb;pdb.set_trace()

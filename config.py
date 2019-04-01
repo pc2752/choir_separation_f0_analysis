@@ -32,7 +32,7 @@ feats_dir_2 = feats_dir
 
 # Model parameters
 batch_size = 5
-max_phr_len = 50
+max_phr_len = 100
 max_models_to_keep = 10
 log_dir = './log_res_full/'
 init_lr = 0.0001

@@ -46,6 +46,7 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
         out_cqt = []
         out_f0 = []
+        out_zeros = []
 
 
         for i in range(max_files_to_process):
@@ -65,21 +66,26 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
             cqt = feat_file['voc_cqt']
 
+            zeros = feat_file['zeros']
+
             for j in range(config.samples_per_file):
                 voc_idx = np.random.randint(0, len(cqt) - config.max_phr_len)
                 out_cqt.append(cqt[voc_idx:voc_idx + config.max_phr_len])
                 out_f0.append(f0[voc_idx:voc_idx + config.max_phr_len])
+                out_zeros.append(zeros[voc_idx:voc_idx + config.max_phr_len])
 
             feat_file.close()
 
-            out_cqt = np.array(out_cqt)
+            out_cqt = abs(np.array(out_cqt))
             # out_hcqt = np.swapaxes(out_hcqt, 2, 3)
             if config.add_noise:
                 out_cqt = np.random.rand(out_cqt.shape) * config.noise_threshold + out_cqt
             out_f0 = np.array(out_f0)
 
+            out_zeros = np.array(out_zeros)
 
-            yield out_cqt, out_f0
+
+            yield out_cqt, out_f0, out_zeros
 
 
 def sep_gen(mode = 'Train', sec_mode = 0):
@@ -267,7 +273,7 @@ def get_stats_phonems():
 
 def main():
     # gen_train_val()
-    get_stats()
+    # get_stats()
     gen = data_gen('Train', sec_mode = 0)
     while True :
         start_time = time.time()
