@@ -41,16 +41,20 @@ batches_per_epoch_val = 10
 samples_per_file = 5
 num_epochs = 2000
 print_every = 1
-validate_every = 10
+validate_every = 1
 save_every = 50
+
+train_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5') and not x.__contains__('1')]
+val_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5') and x.__contains__('1')]
+
 # train_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5') and not x.__contains__('1') and not x.startswith('nino')]
 # val_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5') and x.__contains__('1') or x.startswith('nino')]
 
-train_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5')  and not x== 'nino_4424.hdf5 ']
-val_list = ['nino_4424.hdf5']
+# train_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5')  and not x== 'nino_4424.hdf5 ']
+# val_list = ['nino_4424.hdf5']
 
-# train_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5')  and not x.startswith('nino')]
-# val_list = [x for x in os.listdir(feats_dir_2) if x.endswith('.hdf5') and x.startswith('nino')]
+# train_list = [x for x in os.listdir(feats_dir) if x.endswith('.hdf5')  and not x.startswith('nino')]
+# val_list = [x for x in os.listdir(feats_dir) if x.endswith('.hdf5') and x.startswith('nino')]
 
 add_noise = False
 noise_threshold = 0.2

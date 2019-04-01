@@ -28,6 +28,11 @@ def process_file(file_name):
     return atb, np.array(hcqt)
 
 def data_gen(mode = 'Train', sec_mode = 0):
+    stat_file = h5py.File('./stats.hdf5', mode='r')
+
+    max_f0 = stat_file["f0_maximus"][()]
+    max_cqt = stat_file["cqt_maximus"][()]
+    stat_file.close()
 
     if mode == 'Train' :
         num_batches = config.batches_per_epoch_train
@@ -56,7 +61,7 @@ def data_gen(mode = 'Train', sec_mode = 0):
             # atb, hcqt = process_file(voc_file)
             feat_file = h5py.File(config.feats_dir_2 + voc_file, 'r')
 
-            f0 = feat_file['f0'][()]
+            f0 = feat_file['f0'][()]/max_f0
 
             # atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
 
@@ -64,7 +69,7 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
             # atb = np.clip(atb, 0.0, 1.0)
 
-            cqt = feat_file['voc_cqt']
+            cqt = feat_file['voc_cqt'][()]/max_cqt
 
             zeros = feat_file['zeros']
 
@@ -204,9 +209,10 @@ def get_stats():
     voc_list = [x for x in os.listdir(config.feats_dir) if x.endswith('.hdf5')]
 
 
-    max_feat = np.zeros(4)
-    min_feat = np.ones(4)*1000
- 
+    max_feat_f0 = np.zeros(4)
+    min_feat_f0 = np.ones(4)*1000
+    max_feat_cqt = 0
+    min_feat_cqt = 1 
 
     for voc_to_open in voc_list:
 
@@ -215,33 +221,41 @@ def get_stats():
         # import pdb;pdb.set_trace()
 
         f0 = voc_file["f0"][()]
+        cqt = abs(voc_file["voc_cqt"][()])
 
 
 
 
         maxi_voc_feat = np.array(f0).max(axis=0)
-
+        maxi_cqt = cqt.max()
+        mini_cqt = cqt.min()
+        if maxi_cqt > max_feat_cqt:
+            max_feat_cqt = maxi_cqt
+        if mini_cqt < min_feat_cqt:
+            min_feat_cqt = mini_cqt
         for i in range(len(maxi_voc_feat)):
-            if maxi_voc_feat[i]>max_feat[i]:
-                max_feat[i] = maxi_voc_feat[i]
+            if maxi_voc_feat[i]>max_feat_f0[i]:
+                max_feat_f0[i] = maxi_voc_feat[i]
 
         mini_voc_feat = np.array(f0).min(axis=0)
 
         for i in range(len(mini_voc_feat)):
-            if mini_voc_feat[i]<min_feat[i]:
-                min_feat[i] = mini_voc_feat[i]   
+            if mini_voc_feat[i]<min_feat_f0[i]:
+                min_feat_f0[i] = mini_voc_feat[i]   
 
-    import pdb;pdb.set_trace()
+    # import pdb;pdb.set_trace()
 
 
     hdf5_file = h5py.File('./stats.hdf5', mode='w')
 
-    hdf5_file.create_dataset("feats_maximus", [66], np.float32) 
-    hdf5_file.create_dataset("feats_minimus", [66], np.float32)   
+    hdf5_file.create_dataset("f0_maximus", [4], np.float32) 
+    hdf5_file.create_dataset("cqt_maximus", [1], np.float32)   
 
 
-    hdf5_file["feats_maximus"][:] = max_feat
-    hdf5_file["feats_minimus"][:] = min_feat
+    hdf5_file["f0_maximus"][:] = max_feat_f0
+    hdf5_file["cqt_maximus"][:] = max_feat_cqt
+
+
 
 
     hdf5_file.close()
@@ -273,7 +287,7 @@ def get_stats_phonems():
 
 def main():
     # gen_train_val()
-    # get_stats()
+    get_stats()
     gen = data_gen('Train', sec_mode = 0)
     while True :
         start_time = time.time()

@@ -20,6 +20,11 @@ class Model(object):
     def __init__(self):
         self.get_placeholders()
         self.model()
+        stat_file = h5py.File('./stats.hdf5', mode='r')
+
+        self.max_f0 = stat_file["f0_maximus"][()]
+        self.max_cqt = stat_file["cqt_maximus"][()]
+        stat_file.close()
 
 
     def test_file_all(self, file_name, sess):
@@ -111,6 +116,8 @@ class Model(object):
         Gets the summaries and summary writers for the losses.
         """
         self.loss_summary = tf.summary.scalar('final_loss', self.loss)
+        self.nll_summary = tf.summary.scalar('nll_loss', self.nll)
+        self.rmse_summary = tf.summary.scalar('RMSE', self.rmse)
         self.accuracy_summary = tf.summary.scalar('accuracy', self.accuracy)
         self.train_summary_writer = tf.summary.FileWriter(log_dir+'train/', sess.graph)
         self.val_summary_writer = tf.summary.FileWriter(log_dir+'val/', sess.graph)
@@ -141,7 +148,8 @@ class DeepSal(Model):
         """
         self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder_1, logits = self.output_logits_1))
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round( self.output_placeholder_1 ), tf.round(self.outputs_1)), tf.float32)*self.output_placeholder_1)
-        self.nll = utils.nll_gaussian(self.output_mean*self.output_placeholder_1, self.output_std*self.output_placeholder_1, self.output_placeholder_2)
+        self.nll = utils.nll_gaussian(self.output_mean*self.output_placeholder_1, self.output_std, self.output_placeholder_2)
+        self.rmse = tf.losses.mean_squared_error(self.output_placeholder_2 * self.max_f0 , self.output_mean*self.outputs_1*self.max_f0)
 
     def read_input_file(self, file_name):
         """
@@ -345,19 +353,24 @@ class DeepSal(Model):
 
             batch_num = 0
             epoch_train_loss_1 = 0
-            epoch_train_acc_1 = 0
+            epoch_train_acc = 0
             epoch_train_loss_2 = 0
-            epoch_train_acc_2 = 0
+            epoch_train_rmse = 0
 
-            epoch_val_loss = 0
+            epoch_val_loss_1 = 0
             epoch_val_acc = 0
+            epoch_val_loss_2 = 0
+            epoch_val_rmse = 0
 
             with tf.variable_scope('Training'):
                 for cqt, f0, zeros in data_generator:
 
-                    step_loss, step_acc, summary_str = self.train_model(cqt, f0, zeros, sess)
-                    epoch_train_loss+=step_loss
+                    step_loss_1, step_acc, step_loss_2, step_rmse, summary_str = self.train_model(cqt, f0, zeros, sess)
+
+                    epoch_train_loss_1+=step_loss_1
                     epoch_train_acc+=step_acc
+                    epoch_train_loss_2+=step_loss_2
+                    epoch_train_rmse+= step_rmse
 
                     self.train_summary_writer.add_summary(summary_str, epoch)
                     self.train_summary_writer.flush()
@@ -366,37 +379,52 @@ class DeepSal(Model):
 
                     batch_num+=1
 
-                epoch_train_loss = epoch_train_loss/batch_num
+                epoch_train_loss_1 = epoch_train_loss_1/batch_num
                 epoch_train_acc = epoch_train_acc/batch_num
-                print_dict = {"Training Loss": epoch_train_loss}
+                epoch_train_loss_2 = epoch_train_loss_2/batch_num
+                epoch_train_rmse = epoch_train_rmse/batch_num
+
+
+                print_dict = {"Training Loss 1 ": epoch_train_loss_1}
                 print_dict["Training Accuracy"] =  epoch_train_acc
+                print_dict["Training Loss 2"] =  epoch_train_loss_2
+                print_dict["Training RMSE"] =  epoch_train_rmse
 
             if (epoch + 1) % config.validate_every == 0:
                 batch_num = 0
                 with tf.variable_scope('Validation'):
-                    pre_score, acc_score, rec_score = self.validate_model(sess)
+                    # pre_score, acc_score, rec_score = self.validate_model(sess)
 
-                    # for ins, outs in val_generator:
-                    #     step_loss, step_acc, summary_str = self.validate_model(ins, outs, sess)
-                    #     epoch_val_loss += step_loss
-                    #     epoch_val_acc += step_acc
+                    for cqt, f0, zeros in val_generator:
+                        step_loss_1, step_acc, step_loss_2, step_rmse, summary_str = self.validate_model(cqt, f0, zeros, sess)
+                        epoch_val_loss_1+=step_loss_1
+                        epoch_val_acc+=step_acc
+                        epoch_val_loss_2+=step_loss_2
+                        epoch_val_rmse+= step_rmse
 
-                    #     self.val_summary_writer.add_summary(summary_str, epoch)
-                    #     self.val_summary_writer.flush()
-                    #     batch_num+=1
+                        self.val_summary_writer.add_summary(summary_str, epoch)
+                        self.val_summary_writer.flush()
 
-                    #     utils.progress(batch_num, config.batches_per_epoch_val, suffix='validation done')
+                        batch_num+=1
 
-                    # epoch_val_loss = epoch_val_loss / batch_num
-                    # epoch_val_acc = epoch_val_acc / batch_num
-                    print_dict["Validation Precision"] = pre_score
-                    print_dict["Validation Accuracy"] = acc_score
-                    print_dict["Validation Recall"] = rec_score
+                        utils.progress(batch_num, config.batches_per_epoch_val, suffix='validation done')
+
+                    epoch_val_loss_1 = epoch_val_loss_1/batch_num
+                    epoch_val_acc = epoch_val_acc/batch_num
+                    epoch_val_loss_2 = epoch_val_loss_2/batch_num
+                    epoch_val_rmse = epoch_val_rmse/batch_num
+
+
+                    print_dict["Validation Loss 1"] =  epoch_train_loss_1
+                    print_dict["Validation Accuracy"] =  epoch_train_acc
+                    print_dict["Validation Loss 2"] =  epoch_train_loss_2
+                    print_dict["Validation RMSE"] =  epoch_train_rmse
 
 
             end_time = time.time()
             if (epoch + 1) % config.print_every == 0:
                 self.print_summary(print_dict, epoch, end_time-start_time)
+                # import pdb;pdb.set_trace()
             if (epoch + 1) % config.save_every == 0 or (epoch + 1) == config.num_epochs:
                 self.save_model(sess, epoch+1, config.log_dir)
 
@@ -405,42 +433,46 @@ class DeepSal(Model):
         Function to train the model for each epoch
         """
         feed_dict = {self.input_placeholder: cqt, self.output_placeholder_1: zeros, self.output_placeholder_2: f0, self.is_train: True}
-        # _,_, step_loss_1, step_acc_1, step_loss_2 = sess.run(
-        #     [self.train_function, self.train_function_2, self.loss, self.accuracy, self.nll], feed_dict=feed_dict)
-        import pdb;pdb.set_trace()
+        _,_,  step_loss_1, step_acc, step_loss_2, step_rmse = sess.run(
+            [self.train_function,self.train_function_2, self.loss, self.accuracy, self.nll, self.rmse], feed_dict=feed_dict)
+        # import pdb;pdb.set_trace()
 
-        booboo, baba = sess.run ([self.output_mean, self.output_std ], feed_dict=feed_dict )
+        # booboo, baba = sess.run ([self.output_mean, self.output_std ], feed_dict=feed_dict )
         summary_str = sess.run(self.summary, feed_dict=feed_dict)
 
-        return step_loss, step_acc, summary_str
+        return step_loss_1, step_acc, step_loss_2, step_rmse, summary_str
 
-    def validate_model(self, sess):
+    def validate_model(self,cqt, f0, zeros, sess):
         """
-        Function to train the model for each epoch
+        Function to validate the model for each epoch
         """
-        # feed_dict = {self.input_placeholder: ins, self.output_placeholder: outs, self.is_train: False}
+        feed_dict = {self.input_placeholder: cqt, self.output_placeholder_1: zeros, self.output_placeholder_2: f0, self.is_train: True}
+        step_loss_1, step_acc, step_loss_2, step_rmse = sess.run(
+            [self.loss, self.accuracy, self.nll, self.rmse], feed_dict=feed_dict)
+        # import pdb;pdb.set_trace()
 
-        # step_loss, step_acc = sess.run([self.loss, self.accuracy], feed_dict=feed_dict)
-        # summary_str = sess.run(self.summary, feed_dict=feed_dict)
-        # return step_loss, step_acc, summary_str
-        val_list = config.val_list
-        # start_index = randint(0,len(val_list)-(config.batches_per_epoch_val+1))
-        pre_scores = []
-        acc_scores = []
-        rec_scores = []
-        count = 0
-        for file_name in val_list:
-            # [start_index:start_index+config.batches_per_epoch_val]
-            pre, acc, rec = self.validate_file(file_name, sess)
-            pre_scores.append(pre)
-            acc_scores.append(acc)
-            rec_scores.append(rec)
-            count+=1
-            utils.progress(count, config.batches_per_epoch_val, suffix='validation done')
-        pre_score = np.array(pre_scores).mean()
-        acc_score = np.array(acc_scores).mean()
-        rec_score = np.array(rec_scores).mean()
-        return pre_score, acc_score, rec_score
+        # booboo, baba = sess.run ([self.output_mean, self.output_std ], feed_dict=feed_dict )
+        summary_str = sess.run(self.summary, feed_dict=feed_dict)
+
+        return step_loss_1, step_acc, step_loss_2, step_rmse, summary_str
+        # val_list = config.val_list
+        # # start_index = randint(0,len(val_list)-(config.batches_per_epoch_val+1))
+        # pre_scores = []
+        # acc_scores = []
+        # rec_scores = []
+        # count = 0
+        # for file_name in val_list:
+        #     # [start_index:start_index+config.batches_per_epoch_val]
+        #     pre, acc, rec = self.validate_file(file_name, sess)
+        #     pre_scores.append(pre)
+        #     acc_scores.append(acc)
+        #     rec_scores.append(rec)
+        #     count+=1
+        #     utils.progress(count, config.batches_per_epoch_val, suffix='validation done')
+        # pre_score = np.array(pre_scores).mean()
+        # acc_score = np.array(acc_scores).mean()
+        # rec_score = np.array(rec_scores).mean()
+        # return pre_score, acc_score, rec_score
 
     def eval_all(self, file_name_csv):
         sess = tf.Session()
