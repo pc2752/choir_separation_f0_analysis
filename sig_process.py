@@ -104,7 +104,7 @@ def get_feats(audio, fmin = config.fmin):
 
 
 
-    stft = librosa.core.stft(audio, n_fft = config.nfft, hop_length = config.hopsize, window = config.window).T
+    # stft = librosa.core.stft(audio, n_fft = config.nfft, hop_length = config.hopsize, window = config.window).T
 
     # voc_stft_mag = 2 * abs(voc_stft)/np.sum(config.window)
 
@@ -112,8 +112,8 @@ def get_feats(audio, fmin = config.fmin):
 
     cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = fmin, bins_per_octave = config.bins_per_octave).T
 
-    hcqt = get_hcqt(audio, fmin = fmin)
+    # hcqt = get_hcqt(audio, fmin = fmin)
 
-    hcqt = np.swapaxes(hcqt, 0,1)
+    # hcqt = np.swapaxes(hcqt, 0,1)
 
-    return stft, cqt, hcqt
+    return cqt

@@ -16,6 +16,7 @@ from acoufe import pitch
 
 from scipy.ndimage import filters
 import itertools
+import time
 # import essentia_backend as es
 
 def process_f0(f0, f_bins, n_freqs):
@@ -49,23 +50,23 @@ def grid_to_bins(grid, start_bin_val, end_bin_val):
     return bins
 
 def prep_deepsalience():
-    x = [0,1,2,3,4]
+    x = [0,2,3,4]
 
     combos = [p for p in itertools.product(x, repeat=4)]
 
     combos = combos[1:]
 
-    #  combos_2 = [p for p in itertools.product([0, 1], repeat=4)]
+    combos_2 = [p for p in itertools.product([0, 1], repeat=4)]
 
-    #  combos = combos + combos_2[1:]
+    combos = combos + combos_2[1:]
 
     songs = next(os.walk(config.wav_dir))[1]
-    freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
+    # freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
 
 
-    f_bins = grid_to_bins(freq_grid, 0.0, freq_grid[-1])
+    # f_bins = grid_to_bins(freq_grid, 0.0, freq_grid[-1])
 
-    n_freqs = len(freq_grid)
+    # n_freqs = len(freq_grid)
 
 
     for song in songs:
@@ -78,18 +79,25 @@ def prep_deepsalience():
         count = 0
 
         for combo in combos:
+            # combo = [1,2,3,4]
             combo_str = str(combo[0]) + str(combo[1]) + str(combo[2]) + str(combo[3])
 
             if not os.path.isfile(config.feats_dir+song_name+'_'+combo_str+'.hdf5'):
                 if combo[0]!=0:
+                    start_time = time.time()
                     audio_sop, fs = librosa.core.load(os.path.join(song_dir,song_name+'_soprano_'+str(combo[0])+'.wav'), sr = config.fs)
+                    # print(time.time()-start_time)
+
+                    start_time = time.time()
                     f0_sop = pitch.extract_f0_sac(audio_sop, fs, config.hoptime).reshape(-1,1)
+                    # print(time.time()-start_time)
                     f0 = np.zeros((len(f0_sop),4))
                     f0[:,0] = f0_sop[:,0]
                     # atb_sop = process_f0(f0, f_bins, n_freqs)
-                    # audio = audio_sop
+                    audio = audio_sop
                     # atb = atb_sop
                 if combo[1]!=0:
+                    # start_time = time.time()
                     audio_alt, fs = librosa.core.load(os.path.join(song_dir,song_name + '_alto_' + str(combo[1]) + '.wav'), sr=config.fs)
                     f0_alt = pitch.extract_f0_sac(audio_alt, fs, config.hoptime).reshape(-1,1)
                     # atb_alt = process_f0(f0, f_bins, n_freqs)
@@ -99,7 +107,8 @@ def prep_deepsalience():
                     else:
                         f0 = np.zeros((len(f0_alt),4))
                         audio = audio_alt
-                    f0[:f0_alt.shape[0],3] =f0_alt[:f0.shape[0],0]
+                    f0[:f0_alt.shape[0],1] =f0_alt[:f0.shape[0],0]
+                    # print(time.time()-start_time)
                 if combo[2]!=0:
                     audio_bas, fs = librosa.core.load(os.path.join(song_dir, song_name + '_bass_' + str(combo[2]) + '.wav'), sr=config.fs)
                     f0_bas = pitch.extract_f0_sac(audio_bas, fs, config.hoptime).reshape(-1,1)
@@ -111,7 +120,7 @@ def prep_deepsalience():
                     else:
                         audio = audio[:audio_bas.shape[0]] + audio_bas[:audio.shape[0]]
                         # atb = atb[:atb_bas.shape[0]] + atb_bas[:atb.shape[0]]
-                    f0[:f0_bas.shape[0],3] =f0_bas[:f0.shape[0],0]
+                    f0[:f0_bas.shape[0],2] =f0_bas[:f0.shape[0],0]
                 if combo[3]!=0:
                     audio_ten, fs = librosa.core.load(os.path.join(song_dir, song_name + '_tenor_' + str(combo[3]) + '.wav'), sr=config.fs)
                     f0_ten = pitch.extract_f0_sac(audio_ten, fs, config.hoptime).reshape(-1,1)
@@ -125,9 +134,11 @@ def prep_deepsalience():
                         # atb = atb[:atb_ten.shape[0]] + atb_ten[:atb.shape[0]]
                 num_sources = 4 - combo.count(0)
                 audio = audio/num_sources
-
+                # import pdb;pdb.set_trace()
 
                 voc_cqt = sig_process.get_feats(audio)
+
+                # import pdb;pdb.set_trace()
 
                 voc_cqt, f0 = utils.match_time([voc_cqt,f0])
 

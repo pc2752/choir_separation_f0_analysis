@@ -6,7 +6,7 @@ import os
 wav_dir = '../datasets/ChoralSingingDataset/'
 
 
-feats_dir = './feats_full_res/'
+feats_dir = './feats/'
 voc_feats_dir = './voc_feats/'
 
 
