@@ -9,6 +9,10 @@ import pandas as pd
 import tensorflow as tf
 
 
+def hz_to_cents(x):
+    # For tensors
+    return 1200*tf.log(x+1e-12)/np.log(2)
+
 def nll_gaussian(y_pred_mean,y_pred_sd,y_test):
 
     ## element wise square code from https://fairyonice.github.io/Create-a-neural-net-with-a-negative-log-likelihood-as-a-loss.html

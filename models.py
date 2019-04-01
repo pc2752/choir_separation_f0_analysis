@@ -149,6 +149,7 @@ class DeepSal(Model):
         self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels= self.output_placeholder_1, logits = self.output_logits_1))
         self.accuracy = tf.reduce_mean(tf.cast(tf.equal(tf.round( self.output_placeholder_1 ), tf.round(self.outputs_1)), tf.float32)*self.output_placeholder_1)
         self.nll = utils.nll_gaussian(self.output_mean*self.output_placeholder_1, self.output_std, self.output_placeholder_2)
+        # self.rmse = tf.losses.mean_squared_error(utils.hz_to_cents(self.output_placeholder_2 * self.max_f0) , utils.hz_to_cents(self.output_mean*self.outputs_1*self.max_f0))
         self.rmse = tf.losses.mean_squared_error(self.output_placeholder_2 * self.max_f0 , self.output_mean*self.outputs_1*self.max_f0)
 
     def read_input_file(self, file_name):
@@ -346,6 +347,8 @@ class DeepSal(Model):
 
 
         for epoch in range(start_epoch, config.num_epochs):
+            # if (epoch+1) % 10 == 0:
+            #     import pdb;pdb.set_trace()
             data_generator = data_gen()
             val_generator = data_gen(mode = 'Val')
             start_time = time.time()
@@ -433,8 +436,16 @@ class DeepSal(Model):
         Function to train the model for each epoch
         """
         feed_dict = {self.input_placeholder: cqt, self.output_placeholder_1: zeros, self.output_placeholder_2: f0, self.is_train: True}
-        _,_,  step_loss_1, step_acc, step_loss_2, step_rmse = sess.run(
-            [self.train_function,self.train_function_2, self.loss, self.accuracy, self.nll, self.rmse], feed_dict=feed_dict)
+        _,_,  step_loss_1, step_acc, step_loss_2, step_rmse, probs, means = sess.run(
+            [self.train_function,self.train_function_2, self.loss, self.accuracy, self.nll, self.rmse, self.outputs_1, self.output_mean], feed_dict=feed_dict)
+
+        # import pdb;pdb.set_trace()
+
+
+
+        # rms = utils.hz_to_cents(f0)**2 - utils.hz_to_cents(means*probs)**2
+
+        
         # import pdb;pdb.set_trace()
 
         # booboo, baba = sess.run ([self.output_mean, self.output_std ], feed_dict=feed_dict )

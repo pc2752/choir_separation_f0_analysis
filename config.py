@@ -30,15 +30,15 @@ comp_mode = 'mfsc'
 
 feats_dir_2 = feats_dir
 
-# Model parameters
-batch_size = 5
+# Model parame3ers
+batch_size = 30
 max_phr_len = 100
 max_models_to_keep = 10
 log_dir = './log_res_full/'
 init_lr = 0.0001
 batches_per_epoch_train = 100
 batches_per_epoch_val = 10
-samples_per_file = 5
+samples_per_file = 30
 num_epochs = 2000
 print_every = 1
 validate_every = 1

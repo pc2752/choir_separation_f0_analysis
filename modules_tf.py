@@ -113,7 +113,7 @@ def DeepSalience_2(input_, is_train):
 
     final_layer_s = tf.layers.conv2d(conv5_m, 4, (1, 1), strides=(1, 1), padding='same', name="conv_6_s", activation = None)
 
-    return tf.squeeze(final_layer_m), tf.squeeze(tf.clip_by_value(t=tf.exp(final_layer_s),clip_value_min=tf.constant(1E-4),clip_value_max=tf.constant(1E+100)))
+    return tf.nn.relu(tf.squeeze(final_layer_m)), tf.squeeze(tf.clip_by_value(t=tf.exp(final_layer_s),clip_value_min=tf.constant(1E-4),clip_value_max=tf.constant(1E+100)))
 
 def deconv2d(input_, output_shape,
        k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
