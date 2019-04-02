@@ -110,10 +110,10 @@ def get_feats(audio, fmin = config.fmin):
 
     # voc_stft_phase = np.angle(voc_stft)
 
-    cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = fmin, bins_per_octave = config.bins_per_octave).T
+    # cqt = librosa.core.cqt(audio, sr = config.fs, hop_length = config.hopsize, n_bins = config.cqt_bins, fmin = fmin, bins_per_octave = config.bins_per_octave).T
 
-    # hcqt = get_hcqt(audio, fmin = fmin)
+    hcqt = get_hcqt(audio, fmin = fmin)
 
-    # hcqt = np.swapaxes(hcqt, 0,1)
+    hcqt = np.swapaxes(hcqt, 0,1)
 
-    return cqt
+    return hcqt
