@@ -144,13 +144,13 @@ def prep_deepsalience():
 
                 # import pdb;pdb.set_trace()
 
-                voc_hcqt, atb = utils.match_time([voc_hcqt,atb])
+                voc_hcqt, atb, f0 = utils.match_time([voc_hcqt,atb, f0])
 
                 # zeros = 1 - (f0==0).astype(int)
 
 
 
-                assert voc_hcqt.shape[0] == f0.shape[0]
+                assert voc_hcqt.shape[0] == atb.shape[0]
 
 
 
