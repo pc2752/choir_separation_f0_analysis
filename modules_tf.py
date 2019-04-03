@@ -48,6 +48,32 @@ def DeepConvSep(input_, feat_size = 513, time_context = 30, num_source = 2):
     return output
 
 
+def DeepSalience(input_, is_train):
+    conv1 = tf.layers.conv2d(input_, 128, (5, 5), strides=(1, 1), padding='same', name="conv_1", activation = tf.nn.relu)
+
+    conv1 = tf.layers.batch_normalization(conv1, training=is_train)
+
+    conv2 = tf.layers.conv2d(conv1, 64, (5, 5), strides=(1, 1), padding='same', name="conv_2", activation = tf.nn.relu)
+
+    conv2 = tf.layers.batch_normalization(conv2, training=is_train)
+
+    conv3 = tf.layers.conv2d(conv2, 64, (3, 3), strides=(1, 1), padding='same', name="conv_3", activation = tf.nn.relu)
+
+    conv3 = tf.layers.batch_normalization(conv3, training=is_train)
+
+    conv4 = tf.layers.conv2d(conv3, 64, (3, 3), strides=(1, 1), padding='same', name="conv_4", activation = tf.nn.relu)
+
+    conv4 = tf.layers.batch_normalization(conv4, training=is_train)
+
+    conv5 = tf.layers.conv2d(conv4, 64, (3, 70), strides=(1, 1), padding='same', name="conv_5", activation = tf.nn.relu)
+
+    conv5 = tf.layers.batch_normalization(conv5, training=is_train)
+
+    final_layer = tf.layers.conv2d(conv5, 1, (1, 1), strides=(1, 1), padding='same', name="conv_6", activation = None)
+
+    return tf.squeeze(final_layer)
+
+
 def DeepSalience_1(input_, is_train):
 
     input_ = tf.layers.dense(input_, 256, name = "F_in")

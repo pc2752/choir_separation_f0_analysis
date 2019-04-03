@@ -49,7 +49,8 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
     for k in range(num_batches):
 
-        out_cqt = []
+        out_hcqt = []
+        out_atb = []
         out_f0 = []
         out_zeros = []
 
@@ -63,34 +64,45 @@ def data_gen(mode = 'Train', sec_mode = 0):
 
             f0 = feat_file['f0'][()]/max_f0
 
+            atb = feat_file['atb']
+
+            atb = atb[:, 1:]
+
+            atb[:, 0:4] = 0
+
+            atb = np.clip(atb, 0.0, 1.0)
+
             # atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
 
 
 
             # atb = np.clip(atb, 0.0, 1.0)
 
-            cqt = feat_file['voc_cqt'][()]/max_cqt
+            hcqt = feat_file['voc_hcqt'][()]
 
             zeros = feat_file['zeros']
 
             for j in range(config.samples_per_file):
-                voc_idx = np.random.randint(0, len(cqt) - config.max_phr_len)
-                out_cqt.append(cqt[voc_idx:voc_idx + config.max_phr_len])
+                voc_idx = np.random.randint(0, len(hcqt) - config.max_phr_len)
+                out_hcqt.append(hcqt[voc_idx:voc_idx + config.max_phr_len])
+                out_atb.append(atb[voc_idx:voc_idx + config.max_phr_len])
                 out_f0.append(f0[voc_idx:voc_idx + config.max_phr_len])
                 out_zeros.append(zeros[voc_idx:voc_idx + config.max_phr_len])
 
             feat_file.close()
 
-            out_cqt = abs(np.array(out_cqt))
-            # out_hcqt = np.swapaxes(out_hcqt, 2, 3)
+            out_hcqt = np.array(out_hcqt)
+            out_hcqt = np.swapaxes(out_hcqt, 2, 3)
             if config.add_noise:
                 out_cqt = np.random.rand(out_cqt.shape) * config.noise_threshold + out_cqt
             out_f0 = np.array(out_f0)
 
             out_zeros = np.array(out_zeros)
 
+            out_atb = np.array(out_atb)
 
-            yield out_cqt, out_f0, out_zeros
+
+            yield out_hcqt, out_f0, out_zeros, out_atb
 
 
 def sep_gen(mode = 'Train', sec_mode = 0):
@@ -181,8 +193,8 @@ def sep_gen(mode = 'Train', sec_mode = 0):
             atb = atb[:max_len]
             
             for j in range(config.samples_per_file):
-                voc_idx = np.random.randint(0, len(cqt) - config.max_phr_len)
-                out_hcqt.append(cqt[voc_idx:voc_idx + config.max_phr_len])
+                voc_idx = np.random.randint(0, len(hcqt) - config.max_phr_len)
+                out_hcqt.append(hcqt[voc_idx:voc_idx + config.max_phr_len])
                 out_atb.append(atb[voc_idx:voc_idx + config.max_phr_len])
                 out_feats.append(voc_feats[voc_idx:voc_idx + config.max_phr_len])
 
@@ -287,11 +299,11 @@ def get_stats_phonems():
 
 def main():
     # gen_train_val()
-    get_stats()
+    # get_stats()
     gen = data_gen('Train', sec_mode = 0)
     while True :
         start_time = time.time()
-        ins, outs, feats = next(gen)
+        ins, outs, feats, booboo = next(gen)
         print(time.time()-start_time)
 
     #     plt.subplot(411)

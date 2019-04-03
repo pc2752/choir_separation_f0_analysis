@@ -31,14 +31,14 @@ comp_mode = 'mfsc'
 feats_dir_2 = feats_dir
 
 # Model parame3ers
-batch_size = 30
-max_phr_len = 100
+batch_size = 5
+max_phr_len = 50
 max_models_to_keep = 10
-log_dir = './log_res_full/'
+log_dir = './log_2/'
 init_lr = 0.0001
 batches_per_epoch_train = 100
-batches_per_epoch_val = 10
-samples_per_file = 30
+batches_per_epoch_val = 5
+samples_per_file = batch_size
 num_epochs = 2000
 print_every = 1
 validate_every = 1
@@ -68,5 +68,5 @@ log_dir_sep = './log_sep/'
 min_max = {'tenor': [65.40639132514966, 523.2511306011972], 'soprano': [108.0, 880.0], 'alto': [108, 880.0], 'bass': [55.0, 440.0]}
 min_max_midi = {'tenor': ['C2', 'C5'], 'soprano': ['A2', 'A5'], 'alto': ['A2', 'A5'], 'bass': ['A1', 'A4']}
 
-bins_per_octave_2 = 117
+bins_per_octave_2 = bins_per_octave
 
