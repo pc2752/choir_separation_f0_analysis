@@ -6,12 +6,25 @@ import csv
 import librosa
 import mir_eval
 import pandas as pd
+import tensorflow as tf
 
 def nan_helper(y):
     """Helper to handle indices and logical indices of NaNs.
     """
 
     return np.isinf(y), lambda z: z.nonzero()[0]
+
+def nll_gaussian(y_pred_mean,y_pred_sd,y_test):
+
+    ## element wise square code from https://fairyonice.github.io/Create-a-neural-net-with-a-negative-log-likelihood-as-a-loss.html
+    square = tf.square(y_pred_mean - y_test)## preserve the same shape as y_pred.shape
+    ms = tf.add(tf.divide(square,(y_pred_sd + 1e-10)), tf.log(y_pred_sd + 1e-10))
+    ## axis = -1 means that we take mean across the last dimension 
+    ## the output keeps all but the last dimension
+    ## ms = tf.reduce_mean(ms,axis=-1)
+    ## return scalar
+    ms = tf.reduce_mean(ms)
+    return(ms)
 
 def match_time(feat_list):
     """ 
