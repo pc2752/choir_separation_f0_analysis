@@ -94,14 +94,25 @@ class Model(object):
         Load model parameters, for synthesis or re-starting training. 
         """
         self.init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-        self.saver = tf.train.Saver(max_to_keep= config.max_models_to_keep)
 
+        # self.DeepSalience_vars = [v for v in tf.trainable_variables() if v.name.startswith('DeepSal')]
+        
+        self.DeepSalsaver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Model'))
 
+        # import pdb;pdb.set_trace()
+
+        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Network'))
 
 
         sess.run(self.init_op)
 
         ckpt = tf.train.get_checkpoint_state(log_dir)
+
+        ckpt_deepsal = tf.train.get_checkpoint_state('./log_all_but_1/')
+
+        if ckpt_deepsal and ckpt_deepsal.model_checkpoint_path:
+            print("Using the deep salience model in %s"%ckpt_deepsal.model_checkpoint_path)
+            self.DeepSalsaver.restore(sess, ckpt_deepsal.model_checkpoint_path)
 
         if ckpt and ckpt.model_checkpoint_path:
             print("Using the model in %s"%ckpt.model_checkpoint_path)
@@ -516,8 +527,8 @@ class DeepSal(Model):
         """
         feed_dict = {self.input_placeholder: hcqt, self.output_placeholder_1: zeros, self.output_placeholder_2: f0, self.output_placeholder: atb, self.is_train: True}
         
-        _,_,_,step_loss,  step_loss_1, step_acc, step_loss_2, step_rmse = sess.run(
-            [self.train_function,self.train_function_1,self.train_function_2, self.loss, self.loss_1, self.accuracy, self.nll, self.rmse], feed_dict=feed_dict)
+        _,_,step_loss,  step_loss_1, step_acc, step_loss_2, step_rmse = sess.run(
+            [self.train_function_1,self.train_function_2, self.loss, self.loss_1, self.accuracy, self.nll, self.rmse], feed_dict=feed_dict)
 
 
         summary_str = sess.run(self.summary, feed_dict=feed_dict)
@@ -620,10 +631,9 @@ class DeepSal(Model):
             self.output_logits = DeepSalience(self.input_placeholder, self.is_train)
             self.outputs = tf.nn.sigmoid(self.output_logits)
 
-        with tf.variable_scope('Model_1') as scope:
+        with tf.variable_scope('Network') as scope:
             self.output_logits_1 = DeepSalience_1(self.output_placeholder, self.is_train)
             self.outputs_1 = tf.nn.sigmoid(self.output_logits_1)
-        with tf.variable_scope('Model_2') as scope:
             self.output_mean, self.output_std = DeepSalience_2(self.output_placeholder, self.is_train)
             # self.output_mean = self.output_mean * self.outputs_1
             # self.output_std = self.output_std * self.outputs_1
