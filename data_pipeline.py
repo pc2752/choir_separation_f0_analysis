@@ -62,7 +62,7 @@ def data_gen(mode = 'Train', sec_mode = 0):
             # atb, hcqt = process_file(voc_file)
             feat_file = h5py.File(config.feats_dir_2 + voc_file, 'r')
 
-            f0 = feat_file['f0'][()]/max_f0
+            f0 = feat_file['f0_cents'][()]/max_f0
 
             atb = feat_file['atb']
 
@@ -226,34 +226,51 @@ def get_stats():
     max_feat_cqt = 0
     min_feat_cqt = 1 
 
+    count = 0
+
     for voc_to_open in voc_list:
 
-        voc_file = h5py.File(config.feats_dir+voc_to_open, "r")
+        voc_file = h5py.File(config.feats_dir+voc_to_open, "a")
 
-        # import pdb;pdb.set_trace()
+        # 
 
         f0 = voc_file["f0"][()]
-        cqt = abs(voc_file["voc_cqt"][()])
+
+        y = 69+12*np.log2(f0/440)
+
+        y[np.isinf(y)] = 0
+
+        if "f0_cents" in voc_file.keys():
+            del voc_file["f0_cents"]
+
+        voc_file.create_dataset("f0_cents", f0.shape, np.float64)
+
+        voc_file["f0_cents"][:,:] = y
+        
+        # cqt = abs(voc_file["voc_cqt"][()])
 
 
 
 
-        maxi_voc_feat = np.array(f0).max(axis=0)
-        maxi_cqt = cqt.max()
-        mini_cqt = cqt.min()
-        if maxi_cqt > max_feat_cqt:
-            max_feat_cqt = maxi_cqt
-        if mini_cqt < min_feat_cqt:
-            min_feat_cqt = mini_cqt
+        maxi_voc_feat = np.array(y).max(axis=0)
+        # maxi_cqt = cqt.max()
+        # mini_cqt = cqt.min()
+        # if maxi_cqt > max_feat_cqt:
+        #     max_feat_cqt = maxi_cqt
+        # if mini_cqt < min_feat_cqt:
+        #     min_feat_cqt = mini_cqt
         for i in range(len(maxi_voc_feat)):
             if maxi_voc_feat[i]>max_feat_f0[i]:
                 max_feat_f0[i] = maxi_voc_feat[i]
 
-        mini_voc_feat = np.array(f0).min(axis=0)
+        mini_voc_feat = np.array(y).min(axis=0)
 
         for i in range(len(mini_voc_feat)):
             if mini_voc_feat[i]<min_feat_f0[i]:
-                min_feat_f0[i] = mini_voc_feat[i]   
+                min_feat_f0[i] = mini_voc_feat[i] 
+
+        count+=1
+        utils.progress(count,len(voc_list))  
 
     # import pdb;pdb.set_trace()
 
