@@ -13,8 +13,23 @@ import librosa
 import sig_process
 import matplotlib.pyplot as plt
 from scipy.ndimage import filters
+from scipy.signal import find_peaks
+from scipy.optimize import curve_fit
+
+base_freq_in_cents = 1200*np.log2(32.7/10)
+
+def gauss_function(x , x0, m0, a):
+    return a*np.exp(-(x-x0)**2/(2*m0**2))
+
+def multi_gauss_4(x, x0,m0, a0,x1,m1,a1,x2,m2,a2,x3,m3,a3):
+    return(np.array(gauss_function(x,x0,m0,a0)) + np.array(gauss_function(x,x1,m1,a1))+ np.array(gauss_function(x,x2,m2,a2))+ np.array(gauss_function(x,x3,m3,a3)))
+
+def multi_gauss_3(x, x0,m0, a0,x1,m1,a1,x2,m2,a2):
+    return(np.array(gauss_function(x,x0,m0,a0)) + np.array(gauss_function(x,x1,m1,a1))+ np.array(gauss_function(x,x2,m2,a2)))
 
 
+def multi_gauss_2(x, x0,m0, a0,x1,m1,a1):
+    return(np.array(gauss_function(x,x0,m0,a0)) + np.array(gauss_function(x,x1,m1,a1)))
 
 class Model(object):
     def __init__(self):
@@ -50,21 +65,49 @@ class Model(object):
         """
 
 
-        in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
+        in_batches_hcqt, atb, f0, nchunks_in, nchunks_in_atb = self.read_input_file_1(file_name)
         out_batches_atb = []
-        for in_batch_hcqt in in_batches_hcqt:
-            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
-            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+        out_batches_f0 = []
+        for in_batch_hcqt, in_batch_atb in zip(in_batches_hcqt, atb):
+            feed_dict = {self.input_placeholder: in_batch_hcqt, self.output_placeholder: in_batch_atb, self.is_train: False}
+            out_atb, out_mean = sess.run([self.outputs, self.output_mean],  feed_dict=feed_dict)
             out_batches_atb.append(out_atb)
+            out_batches_f0.append(out_mean)
         out_batches_atb = np.array(out_batches_atb)
+        out_batches_f0 = np.array(out_batches_f0) * self.max_f0
+
+        import pdb;pdb.set_trace()
+
         out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
-                         nchunks_in)
+                         nchunks_in_atb)
         out_batches_atb = out_batches_atb[:atb.shape[0]]
 
+        atb = utils.overlapadd(atb.reshape(atb.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in_atb)
+
+        out_f0 = utils.overlapadd(out_batches_f0.reshape(out_batches_f0.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in)
+
+        plt.plot(f0[:,0], label = 'Ground truth Soprano f0')
+        plt.plot(out_f0[:,0], label = 'Output Soprano f0 mean')
+        plt.legend()
+        plt.show()
+
+        import pdb;pdb.set_trace()
+
+        ax1 = plt.subplot(211)
+        ax1.set_title('Ground Truth f0 Probabilities')
+        plt.imshow(atb.T, origin = 'lower', aspect = 'auto')
+        ax2 = plt.subplot(212)
+        ax2.set_title('Output f0 Probabilities')
+        plt.imshow(out_batches_atb.T, origin = 'lower', aspect = 'auto')
+        plt.show()
+        
+
+
+
+
         baba = np.mean(np.equal(np.round(atb[atb>0]), np.round(out_batches_atb[atb>0])))
-
-        atb = filters.gaussian_filter1d(atb.T, 0.5, axis=0, mode='constant').T
-
         #
         time_1, ori_freq = utils.process_output(atb)
         time_2, est_freq = utils.process_output(out_batches_atb)
@@ -101,12 +144,12 @@ class Model(object):
 
         # import pdb;pdb.set_trace()
 
-        self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Network'))
+        # self.saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Network'))
 
 
         sess.run(self.init_op)
 
-        ckpt = tf.train.get_checkpoint_state(log_dir)
+        # ckpt = tf.train.get_checkpoint_state(log_dir)
 
         ckpt_deepsal = tf.train.get_checkpoint_state('./log_all_but_1/')
 
@@ -114,9 +157,9 @@ class Model(object):
             print("Using the deep salience model in %s"%ckpt_deepsal.model_checkpoint_path)
             self.DeepSalsaver.restore(sess, ckpt_deepsal.model_checkpoint_path)
 
-        if ckpt and ckpt.model_checkpoint_path:
-            print("Using the model in %s"%ckpt.model_checkpoint_path)
-            self.saver.restore(sess, ckpt.model_checkpoint_path)
+        # if ckpt and ckpt.model_checkpoint_path:
+        #     print("Using the model in %s"%ckpt.model_checkpoint_path)
+        #     self.saver.restore(sess, ckpt.model_checkpoint_path)
 
 
     def get_optimizers(self):
@@ -211,20 +254,22 @@ class DeepSal(Model):
         """
         # if file_name.endswith('.hdf5'):
         feat_file = h5py.File(config.feats_dir + file_name)
-        atb = feat_file['f0'][()]
+        f0 = feat_file['f0_cents'][()]
 
-        # atb = atb[:, 1:]
+        atb = feat_file['atb'][()]
 
-        hcqt = abs(feat_file['voc_cqt'][()])
+        atb = atb[:, 1:]
+
+        hcqt = abs(feat_file['voc_hcqt'][()])
 
         feat_file.close()
 
-        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt)
-        # in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*config.cqt_bins))
-        # in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
-        #                                           6, config.cqt_bins)
-        # in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
-        return in_batches_hcqt, atb, nchunks_in
+        atb, nchunks_in_atb = utils.generate_overlapadd(atb)
+        in_batches_hcqt, nchunks_in = utils.generate_overlapadd(hcqt.reshape(-1,6*config.cqt_bins))
+        in_batches_hcqt = in_batches_hcqt.reshape(in_batches_hcqt.shape[0], config.batch_size, config.max_phr_len,
+                                                  6, config.cqt_bins)
+        in_batches_hcqt = np.swapaxes(in_batches_hcqt, -1, -2)
+        return in_batches_hcqt, atb, f0, nchunks_in, nchunks_in_atb
 
     def read_input_wav_file(self, file_name):
         """
@@ -256,31 +301,240 @@ class DeepSal(Model):
         scores = self.extract_f0_file(file_name, sess)
         return scores
 
+    def test_file_1(self, file_name):
+        """
+        Function to extract multi pitch from file. Currently supports only HDF5 files.
+        """
+        sess = tf.Session()
+        self.load_model(sess, log_dir = config.log_dir)
+        scores = self.validate_file_1(file_name, sess)
+        return scores
+
+
+
+    def fit_gauss(self, sample, height = 0.27, distance = 6):
+        peaks = find_peaks(sample, height =height, distance = distance)
+        x = np.arange(0,len(sample))
+        ins = [[x,1,y] for x,y in zip(peaks[0], peaks[1]['peak_heights'])]
+        num_peaks = len(peaks[0])
+        output = []
+        if num_peaks == 0:
+            popt = 0
+            rmse = 0
+        elif num_peaks == 1:
+            try:
+                popt, pcov = curve_fit(gauss_function, x, sample, ins)
+                rmse = ((sample-gauss_function(x, *popt))**2).mean()
+            except:
+                popt = 0
+                rmse = 0
+        elif num_peaks == 2:
+            try:
+                popt, pcov = curve_fit(multi_gauss_2, x, sample, ins)
+                rmse = ((sample-multi_gauss_2(x, *popt))**2).mean()
+            except:
+                popt = 0
+                rmse = 0
+        elif num_peaks ==3:
+            try:
+                popt, pcov = curve_fit(multi_gauss_3, x, sample, ins)
+                rmse = ((sample-multi_gauss_3(x, *popt))**2).mean()
+
+            except:
+                popt = 0
+                rmse = 0
+        else:
+            try:
+                popt, pcov = curve_fit(multi_gauss_4, x, sample, ins[:4])
+                rmse = ((sample-multi_gauss_4(x, *popt))**2).mean()
+            except:
+                popt = 0
+                rmse = 0
+        return popt, rmse
+
+    def process_params(self, params):
+
+        if isinstance(params, int):
+            outs =(0,0)
+        else:
+            outs = []
+            for i in range(int(len(params)/3)):
+                mean = base_freq_in_cents+(params[i*3]*20)
+                std = params[(i*3)+1]*20
+                outs.append((mean,std))
+            
+        return outs
+
+
+
+
+
+
+
+
+
+
     def test_wav_file(self, file_name, save_path):
         """
         Function to extract multi pitch from wav file.
         """
+        st = time.time()
 
         sess = tf.Session()
         self.load_model(sess, log_dir = config.log_dir)
         in_batches_hcqt, nchunks_in, max_len = self.read_input_wav_file(file_name)
+        out_batches_mean = []
+        out_batches_std = []
         out_batches_atb = []
+
         for in_batch_hcqt in in_batches_hcqt:
             feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
             out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+            # out_atb,out_mean, out_std = sess.run([self.outputs, self.output_mean_1, self.output_std_1], feed_dict=feed_dict)
+            # out_batches_mean.append(out_mean)
+            # out_batches_std.append(out_std)
             out_batches_atb.append(out_atb)
+
+        # out_batches_mean = np.array(out_batches_mean)
+        # out_batches_mean = utils.overlapadd(out_batches_mean.reshape(out_batches_mean.shape[0], config.batch_size, config.max_phr_len, -1),
+        #                  nchunks_in)
+        # out_batches_mean = out_batches_mean[:max_len]
+
         out_batches_atb = np.array(out_batches_atb)
         out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
                          nchunks_in)
         out_batches_atb = out_batches_atb[:max_len]
-        # plt.imshow(out_batches_atb.T, origin = 'lower', aspect = 'auto')
-        #
-        # plt.show()
-        # import pdb;pdb.set_trace()
+
+        print("Inference done, took {} seconds".format(time.time()-st))
+
+        # out_batches_std = np.array(out_batches_std)
+        # out_batches_std = utils.overlapadd(out_batches_std.reshape(out_batches_std.shape[0], config.batch_size, config.max_phr_len, -1),
+        #                  nchunks_in)
+        # out_batches_std = out_batches_std[:max_len]
+
+        
+
+        params = [self.fit_gauss(x) for x in out_batches_atb] 
+
+        print("Work done, took {} seconds".format(time.time()-st))
+
+
+
+        # peaks = [find_peaks(x, height = 0.3) for x in out_batches_atb]
+
+        # peak_lens = [len(x[0]) for x in peaks]
+        # freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
+        # plt.plot(multi_gauss_4(np.arange(360), *params[15771]), label = 'gaussian fit')
+
+        out_list = [self.process_params(x) for x in params]
+        time_grid = np.linspace(0, config.hoptime * len(out_list), len(out_list))
+# 
+        import pdb;pdb.set_trace()
+
+        with open('./your_file.txt', 'w') as f:
+            for item in out_list:
+                f.write("%s\n" % item)
+        
+
+        with open(file_name[:-4]+'.txt') as filer:
+            gt = filer.readlines()
+
+        time_2 = np.array([float(x.split()[0]) for x in gt])
+        mean_sop_gt = np.array([float(x.split()[2]) for x in gt])
+        # mean_sop_gt = np.array([float(x.split()[2]) for x in gt])
+
+        mean_sop_gt = 69+12*np.log2(mean_sop_gt/440)
+
+        mean_sop_gt[np.isinf(mean_sop_gt)] = 0
+
+
+        std_sop_gt = [x.split()[1] for x in gt]
+
+        out_mean_re = mir_eval.multipitch.resample_multipitch(time_grid, [x*self.max_f0 for x in out_batches_std], time_2)
+        out_sop = [x[0] for x in out_mean_re]
+        plt.plot(out_sop, label = 'Output Mean For Soprano')
+        plt.plot(mean_sop_gt, label = 'Ground Truth Mean For Soprano')
+        plt.legend()
+        plt.show()
+
+        import pdb;pdb.set_trace()
+
 
         time_1, ori_freq = utils.process_output(out_batches_atb)
         utils.save_multif0_output(time_1, ori_freq, save_path)
 
+    def test_wav_file_1(self, sess,file_name, save_path, filer):
+        """
+        Function to extract multi pitch from wav file.
+        """
+        in_batches_hcqt, nchunks_in, max_len = self.read_input_wav_file(file_name)
+        out_batches_mean = []
+        out_batches_std = []
+        out_batches_atb = []
+
+        for in_batch_hcqt in in_batches_hcqt:
+            feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
+            out_atb = sess.run(self.outputs, feed_dict=feed_dict)
+            # out_atb,out_mean, out_std = sess.run([self.outputs, self.output_mean_1, self.output_std_1], feed_dict=feed_dict)
+            # out_batches_mean.append(out_mean)
+            # out_batches_std.append(out_std)
+            out_batches_atb.append(out_atb)
+
+        # out_batches_mean = np.array(out_batches_mean)
+        # out_batches_mean = utils.overlapadd(out_batches_mean.reshape(out_batches_mean.shape[0], config.batch_size, config.max_phr_len, -1),
+        #                  nchunks_in)
+        # out_batches_mean = out_batches_mean[:max_len]
+
+        out_batches_atb = np.array(out_batches_atb)
+        out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
+                         nchunks_in)
+        out_batches_atb = out_batches_atb[:max_len]
+
+
+        # out_batches_std = np.array(out_batches_std)
+        # out_batches_std = utils.overlapadd(out_batches_std.reshape(out_batches_std.shape[0], config.batch_size, config.max_phr_len, -1),
+        #                  nchunks_in)
+        # out_batches_std = out_batches_std[:max_len]
+
+        params = []
+        rmse_total = []
+        count = []
+
+        for x in out_batches_atb:
+            popt, rmse = self.fit_gauss(x)
+            params.append(popt)
+            rmse_total.append(rmse)
+
+        # import pdb;pdb.set_trace()
+
+
+        
+
+        # params = [self.fit_gauss(x) for x in out_batches_atb] 
+
+
+
+
+
+        # peaks = [find_peaks(x, height = 0.3) for x in out_batches_atb]
+
+        # peak_lens = [len(x[0]) for x in peaks]
+        # freq_grid = librosa.cqt_frequencies(config.cqt_bins, config.fmin, config.bins_per_octave)
+        # plt.plot(multi_gauss_4(np.arange(360), *params[15771]), label = 'gaussian fit')
+
+        out_list = [self.process_params(x) for x in params]
+        time_grid = np.linspace(0, config.hoptime * len(out_list), len(out_list))
+# 
+        out_list = [[x]+[y] for x,y in zip(time_grid,out_list)]  
+
+        with open(os.path.join(save_path, filer[:-4]+'.txt'), 'w') as f:
+            for item in out_list:
+                f.write("%s\n" % item)
+        with open(os.path.join(save_path, filer[:-4]+'.rmse'), 'w') as f:
+            for item in rmse_total:
+                f.write("%s\n" % item)
+        # import pdb;pdb.set_trace()
+        
 
     def test_wav_folder(self, folder_name, save_path):
         """
@@ -291,27 +545,13 @@ class DeepSal(Model):
 
         sess = tf.Session()
         self.load_model(sess, log_dir = config.log_dir)
-        
-
-        for song in songs:
-            count = 0
-            print ("Processing song %s" % song)
-            file_list = [x for x in os.listdir(os.path.join(folder_name, song)) if x.endswith('.wav') and not x.startswith('.')]
-            for file_name in file_list:
-                in_batches_hcqt, nchunks_in, max_len = self.read_input_wav_file(os.path.join(folder_name, song, file_name))
-                out_batches_atb = []
-                for in_batch_hcqt in in_batches_hcqt:
-                    feed_dict = {self.input_placeholder: in_batch_hcqt, self.is_train: False}
-                    out_atb = sess.run(self.outputs, feed_dict=feed_dict)
-                    out_batches_atb.append(out_atb)
-                out_batches_atb = np.array(out_batches_atb)
-                out_batches_atb = utils.overlapadd(out_batches_atb.reshape(out_batches_atb.shape[0], config.batch_size, config.max_phr_len, -1),
-                                 nchunks_in)
-                out_batches_atb = out_batches_atb[:max_len]
-                time_1, ori_freq = utils.process_output(out_batches_atb)
-                utils.save_multif0_output(time_1, ori_freq, os.path.join(save_path,song,file_name[:-4]+'.csv'))
-                count+=1
-                utils.progress(count, len(file_list), suffix='evaluation done')
+        count = 0
+        file_list = [x for x in os.listdir(folder_name) if x.endswith('.wav') and not x.startswith('.')]
+        # import pdb;pdb.set_trace()
+        for file_name in file_list:
+            self.test_wav_file_1(sess,os.path.join(folder_name, file_name), save_path, file_name)
+            count+=1
+            utils.progress(count, len(file_list), suffix='evaluation done')
 
     def extract_f0_file(self, file_name, sess):
         in_batches_hcqt, atb, nchunks_in = self.read_input_file(file_name)
@@ -631,10 +871,13 @@ class DeepSal(Model):
             self.output_logits = DeepSalience(self.input_placeholder, self.is_train)
             self.outputs = tf.nn.sigmoid(self.output_logits)
 
-        with tf.variable_scope('Network') as scope:
-            self.output_logits_1 = DeepSalience_1(self.output_placeholder, self.is_train)
-            self.outputs_1 = tf.nn.sigmoid(self.output_logits_1)
-            self.output_mean, self.output_std = DeepSalience_2(self.output_placeholder, self.is_train)
+        # with tf.variable_scope('Network') as scope:
+        #     self.output_logits_1 = DeepSalience_1(self.output_placeholder, self.is_train)
+        #     self.outputs_1 = tf.nn.sigmoid(self.output_logits_1)
+        #     # self.output_mean, self.output_std = DeepSalience_2(self.output_placeholder, self.is_train)
+        #     # scope.reuse_variables()
+
+        #     self.output_mean_1, self.output_std_1 = DeepSalience_2(self.outputs, self.is_train)
             # self.output_mean = self.output_mean * self.outputs_1
             # self.output_std = self.output_std * self.outputs_1
 

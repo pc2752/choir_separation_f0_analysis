@@ -13,7 +13,7 @@ def train(_):
 
 def eval(file_name):
 	model = models.DeepSal()
-	scores = model.test_file(file_name)
+	scores = model.test_file_1(file_name)
 	print("Evaluated file {}".format(file_name))
 	for key, value in scores.items():
 		print('{} : {}'.format(key, value))
